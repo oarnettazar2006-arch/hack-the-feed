@@ -122,6 +122,7 @@ def run(now: datetime | None = None) -> list[dict]:
             "serie": series,
             "video_declencheur": launcher["id"],
             "videos_phares": [v["id"] for v in top_videos],
+            "videos": [v["id"] for v in members],
             "affirmations": [{"video": v["id"], "ton": notes[v["id"]]["ton"], "affirmation": notes[v["id"]]["affirmation"]}
                              for v in members][:60],
         })
