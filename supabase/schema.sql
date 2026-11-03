@@ -83,6 +83,12 @@ create index if not exists videos_topic_idx on videos(topic_id);
 create index if not exists positions_topic_idx on topic_positions(topic_id);
 create index if not exists coverage_topic_idx on topic_coverage(topic_id);
 
+-- Droits explicites (le projet n'expose pas automatiquement les nouvelles tables).
+grant usage on schema public to anon, authenticated, service_role;
+grant select on topics, topic_positions, topic_coverage, videos, brief to anon, authenticated;
+grant all on topics, topic_positions, topic_coverage, videos, brief to service_role;
+grant usage, select on all sequences in schema public to service_role;
+
 -- Lecture publique (données non sensibles), écriture réservée au pipeline (clé service_role).
 alter table topics enable row level security;
 alter table topic_positions enable row level security;
