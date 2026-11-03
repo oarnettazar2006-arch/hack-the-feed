@@ -3,7 +3,7 @@ import argparse
 import json
 from datetime import datetime
 
-from . import analyze, annotate, config, store
+from . import analyze, annotate, config, showcase, store
 from .sources import fake_social, media
 
 
@@ -21,6 +21,8 @@ def main() -> None:
         a = sub.add_parser(name, help="annoter avec Haiku (payant)")
         a.add_argument("--limit", type=int, default=None)
     sub.add_parser("analyze", help="regrouper, scorer, comparer aux médias (gratuit)")
+    sc = sub.add_parser("showcase", help="fiches Opus pour les premiers sujets + brief (payant)")
+    sc.add_argument("--top", type=int, default=config.TOP_TOPICS_SHOWCASE)
     sub.add_parser("cost", help="dépenses enregistrées")
     args = p.parse_args()
 
@@ -39,6 +41,13 @@ def main() -> None:
         (config.OUT_DIR / "topics.json").write_text(json.dumps(topics, ensure_ascii=False, indent=2))
         show([{k: t[k] for k in ("rang", "etat", "sujet_type", "videos_total", "videos_recentes", "signaux", "couvert")}
               for t in topics])
+    elif args.cmd == "showcase":
+        topics = json.loads((config.OUT_DIR / "topics.json").read_text())
+        cards = showcase.build_cards(run_id, topics, args.top)
+        brief = showcase.morning_brief(cards)
+        (config.OUT_DIR / "topics.json").write_text(json.dumps(cards, ensure_ascii=False, indent=2))
+        (config.OUT_DIR / "brief.json").write_text(json.dumps(brief, ensure_ascii=False, indent=2))
+        show({"fiches": args.top, "brief": brief, "dépense ($)": round(store.spent(run_id), 4)})
     elif args.cmd == "cost":
         show({"total ($)": round(store.spent(), 4), "détail": store.cost_report()})
 
