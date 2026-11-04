@@ -28,6 +28,7 @@ def main() -> None:
         x.add_argument("--per-day", type=int, default=30)
         x.add_argument("--themes", nargs="*", default=None)
     oc.add_argument("--yes", action="store_true", help="lancer sans confirmation")
+    sub.add_parser("oriane-find-media", help="trouver les comptes TikTok/Instagram des médias (crédits, ~40 appels)")
     sub.add_parser("oriane-media", help="vidéos des comptes médias via Oriane (crédits)")
     ic = sub.add_parser("oriane-csv", help="importer un export CSV de l'app Oriane (gratuit)")
     ic.add_argument("path")
@@ -65,6 +66,8 @@ def main() -> None:
         show(oriane.plan(args.days, args.per_day, args.themes, media=False))
         if args.yes or input("Lancer cette collecte ? (oui/non) ").strip().lower() in ("o", "oui", "y", "yes"):
             show(oriane.collect_social(args.days, args.per_day, args.themes))
+    elif args.cmd == "oriane-find-media":
+        show(oriane.find_media_profiles())
     elif args.cmd == "oriane-media":
         show(oriane.collect_media())
     elif args.cmd == "oriane-csv":

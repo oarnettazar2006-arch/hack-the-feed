@@ -84,7 +84,26 @@ def coordination(members: list[dict]) -> dict | None:
             "exemple": example["text"][:200]}
 
 
-def _state(accel: float, recent: int, total: int, covered: bool) -> str:
+PRESS_GROUPS = {"traditionnel", "droite", "gauche"}
+SOCIAL_GROUPS = {"brut", "concurrent"}
+
+
+def coverage_known_since(medias: list[dict]) -> dict:
+    """Pour chaque famille de médias, la date depuis laquelle TOUTES ses sources régulières sont connues.
+
+    Une source qui n'a que 1 à 4 contenus est ignorée (trop peu pour dater sa couverture).
+    """
+    starts: dict[str, dict[str, str]] = {"presse": {}, "concurrents": {}}
+    counts = Counter(m["account"] for m in medias)
+    for m in medias:
+        family = "presse" if m["account_group"] in PRESS_GROUPS else "concurrents" if m["account_group"] in SOCIAL_GROUPS else None
+        if family and counts[m["account"]] >= 5:
+            day = m["published_at"][:10]
+            starts[family][m["account"]] = min(day, starts[family].get(m["account"], day))
+    return {family: (max(v.values()) if v else None) for family, v in starts.items()}
+
+
+def _state(accel: float, recent: int, total: int, covered: bool, coverage_complete: bool = True) -> str:
     if accel >= 2.5 and recent >= config.MIN_VIDEOS:
         state = "en forte hausse"
     elif accel >= 1.5:
@@ -98,7 +117,8 @@ def _state(accel: float, recent: int, total: int, covered: bool) -> str:
     if state == "petit mais en accélération":
         return "à surveiller" if not covered else "déjà repéré"
     if state == "stable" and total >= 60 and not covered:
-        return "angle mort durable"
+        # Un angle mort ne s'affirme que si l'on connaît la couverture de toute la période.
+        return "angle mort durable" if coverage_complete else "stable"
     return state
 
 
@@ -126,6 +146,7 @@ def run(now: datetime | None = None) -> list[dict]:
     vectors = embed([notes[v["id"]]["sujet"] for v in kept])
     labels = _cluster(vectors)
     media_vectors = embed([notes[m["id"]]["sujet"] for m in medias]) if medias else np.zeros((0, vectors.shape[1]))
+    known_since = coverage_known_since(medias)
 
     topics = []
     for label in sorted(set(labels)):
@@ -155,6 +176,8 @@ def run(now: datetime | None = None) -> list[dict]:
             for i in order if sims[i] >= config.COVERAGE_SIMILARITY
         ]
         covered = bool(coverage)
+        base_day = base_start.date().isoformat()
+        coverage_complete = all(d is not None and d <= base_day for d in known_since.values())
 
         days = Counter()
         for v in members:
@@ -196,7 +219,10 @@ def run(now: datetime | None = None) -> list[dict]:
             "couverture": coverage,
             "couvert": covered,
             "couvert_par_brut": any(c["groupe"] == "brut" for c in coverage),
-            "etat": _state(accel, len(recent), len(members), covered),
+            "couverture_presse_depuis": known_since["presse"],
+            "couverture_concurrents_depuis": known_since["concurrents"],
+            "couverture_complete": coverage_complete,
+            "etat": _state(accel, len(recent), len(members), covered, coverage_complete),
             "serie": series,
             "video_declencheur": launcher["id"],
             "videos_phares": [v["id"] for v in top_videos],

@@ -25,7 +25,10 @@ create table if not exists topics (
   couvert_par_brut boolean not null,
   serie jsonb not null default '[]',  -- [{jour, videos}] pour la mini-courbe
   video_declencheur text,
-  imprevu boolean not null default false  -- trouvé uniquement par le filet aveugle
+  imprevu boolean not null default false,  -- trouvé uniquement par le filet aveugle
+  couverture_presse_depuis date,          -- couverture de toute la presse suivie connue depuis
+  couverture_concurrents_depuis date,     -- idem pour Brut et ses concurrents
+  couverture_complete boolean not null default false  -- connue sur toute la période analysée
 );
 
 create table if not exists topic_positions (

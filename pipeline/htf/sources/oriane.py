@@ -88,23 +88,38 @@ THEMES = {
 # Le filtre d'intérêt public (annotation) écarte le divertissement ; il reste l'actualité imprévue.
 BLIND_NET = "veille ouverte"
 
-# Comptes TikTok et Instagram des médias, pour la base de couverture. À vérifier samedi (handles exacts).
-MEDIA_HANDLES = {
-    "Brut": ("brut", ["brut", "brutofficiel", "brutfr"]),
-    "HugoDécrypte": ("concurrent", ["hugodecrypte"]),
-    "Konbini": ("concurrent", ["konbini", "konbininews"]),
-    "Loopsider": ("concurrent", ["loopsider"]),
-    "Le Monde": ("traditionnel", ["lemondefr"]),
+# Médias suivis sur TikTok et Instagram (base de couverture). Leurs comptes sont trouvés par la recherche
+# de profils d'Oriane (nom affiché ou compte proche, le plus suivi par plateforme), puis vérifiés à l'œil.
+MEDIA_ACCOUNTS = {
+    "Brut": ("brut", ["Brut"]),
+    "HugoDécrypte": ("concurrent", ["HugoDécrypte", "hugodecrypte"]),
+    "Konbini": ("concurrent", ["Konbini", "Konbini news"]),
+    "Loopsider": ("concurrent", ["Loopsider"]),
+    "Blast": ("concurrent", ["Blast", "blast info"]),
+    "Le Crayon": ("concurrent", ["Le Crayon"]),
+    "Vert": ("concurrent", ["Vert le média"]),
+    "Le Monde": ("traditionnel", ["Le Monde", "lemondefr"]),
     "franceinfo": ("traditionnel", ["franceinfo"]),
-    "20 Minutes": ("traditionnel", ["20minutesfrance", "20minutes"]),
-    "BFMTV": ("traditionnel", ["bfmtv"]),
-    "Blast": ("concurrent", ["blastinfo", "blast_info"]),
-    "CNews": ("droite", ["cnews"]),
-    "Le Figaro": ("droite", ["lefigarofr", "le_figaro"]),
-    "Libération": ("gauche", ["liberationfr", "libe"]),
+    "20 Minutes": ("traditionnel", ["20 Minutes"]),
+    "BFMTV": ("traditionnel", ["BFMTV"]),
+    "Le Parisien": ("traditionnel", ["Le Parisien"]),
+    "Ouest-France": ("traditionnel", ["Ouest-France"]),
+    "Le Figaro": ("droite", ["Le Figaro"]),
+    "CNews": ("droite", ["CNEWS"]),
+    "Frontières": ("droite", ["Frontières média"]),
+    "Libération": ("gauche", ["Libération"]),
+    "Mediapart": ("gauche", ["Mediapart"]),
+    "Le Média": ("gauche", ["Le Média"]),
 }
 
-# Bearer confirmé le 4/11 (x-api-key refusé). Les autres restent en secours.
+
+def profile_query(names: list[str], platform: str) -> dict:
+    return {"operator": "and", "filters": {"platform": {"includes": [platform]}},
+            "queries": [{"operator": "or", "filters": {
+                "displayName": {"includesFuzzy": {"values": names}},
+                "handle": {"includesFuzzy": {"values": [n.replace(" ", "").lower() for n in names]}}}}]}
+
+
 AUTH_STYLES = [
     lambda k: {"Authorization": f"Bearer {k}"},
     lambda k: {"x-api-key": k},
@@ -125,13 +140,13 @@ class Oriane:
         self.auth = None
         self.calls = 0
 
-    def _post(self, body: dict, params: dict) -> dict:
+    def _post(self, body: dict, params: dict, path: str = "/rest/contents/search") -> dict:
         styles = [self.auth] if self.auth else AUTH_STYLES
         last = None
         for style in styles:
             for attempt in range(4):
                 self.calls += 1
-                r = self.http.post("/rest/contents/search", json=body, params=params, headers=style(self.key))
+                r = self.http.post(path, json=body, params=params, headers=style(self.key))
                 if r.status_code in (429, 500, 502, 503, 504):
                     time.sleep(2 ** attempt)
                     continue
@@ -156,6 +171,10 @@ class Oriane:
             body["queries"] = queries
         res = self._post(body, {"limit": limit, "offset": offset, "projection": projection, "sort": sort})
         return res["data"].get("results", []), res["metadata"].get("pagination", {}).get("totalCount", 0)
+
+    def profiles(self, body: dict, limit: int = 5) -> list[dict]:
+        res = self._post(body, {"limit": limit, "sort": "followersCount:desc"}, path="/rest/profiles/search")
+        return res["data"].get("results", [])
 
 
 def _text_filter(terms: list[str]) -> dict:
@@ -221,7 +240,7 @@ def to_item(r: dict, theme: str | None, weight: float, kind: str = "social", gro
 def plan(days: int, per_day: int, themes: list[str] | None = None, media: bool = True) -> dict:
     themes = themes or list(THEMES) + [BLIND_NET]
     social_calls = days * len(themes) + days  # + 1 appel par jour pour le total des vidéos françaises
-    media_calls = len(MEDIA_HANDLES) if media else 0
+    media_calls = len(MEDIA_ACCOUNTS) * 2 if media else 0  # ~2 pages de 100 par média
     return {"thèmes": len(themes), "jours": days, "vidéos max par thème et par jour": per_day,
             "appels sociaux": social_calls, "appels médias": media_calls,
             "appels au total": social_calls + media_calls,
@@ -281,21 +300,71 @@ def collect_social(days: int, per_day: int, themes: list[str] | None = None,
             "complétude de l'index par jour": {d: round(t / reference, 2) for d, t in sorted(day_totals.items())}}
 
 
-def collect_media(days: int = 14, per_account: int = 100) -> dict:
-    """Vidéos TikTok et Instagram des médias (Brut et concurrents), pour la base de couverture."""
+PROFILES_FILE = config.ROOT / "docs" / "oriane-media-profiles.json"
+
+
+def find_media_profiles() -> dict:
+    """Trouve le compte TikTok et Instagram le plus suivi de chaque média (2 petits appels par média).
+
+    Résultat enregistré dans docs/oriane-media-profiles.json, à relire à l'œil : un homonyme reste possible.
+    """
+    import json
+    api = Oriane()
+    found = json.loads(PROFILES_FILE.read_text()) if PROFILES_FILE.exists() else {}
+    stopped = None
+    for name, (group, names) in MEDIA_ACCOUNTS.items():
+        if found.get(name, {}).get("comptes"):
+            continue  # déjà trouvé lors d'un passage précédent
+        found[name] = {"groupe": group, "comptes": []}
+        for platform in ("tiktok", "instagram"):
+            try:
+                results = api.profiles(profile_query(names, platform), limit=3)
+            except OrianeCreditsExhausted as e:
+                stopped = str(e)
+                break
+            if results:
+                best = results[0]
+                found[name]["comptes"].append({
+                    "plateforme": platform, "id": best["id"], "compte": best.get("handle"),
+                    "nom": best.get("displayName"), "abonnés": best.get("followersCount"),
+                    "vérifié": best.get("isVerified"),
+                    "autres candidats": [f"{r.get('handle')} ({r.get('followersCount')})" for r in results[1:]],
+                })
+        if stopped:
+            break
+    found = {k: v for k, v in found.items() if v["comptes"]}  # un média interrompu sera repris au prochain passage
+    PROFILES_FILE.write_text(json.dumps(found, ensure_ascii=False, indent=1))
+    return {"appels": api.calls, "fichier": str(PROFILES_FILE.relative_to(config.ROOT)),
+            **({"arrêt": stopped} if stopped else {}),
+            **{n: [f"{c['plateforme']} @{c['compte']} ({c['abonnés']})" for c in v["comptes"]] for n, v in found.items()}}
+
+
+def collect_media(days: int = 14, max_per_account: int = 300) -> dict:
+    """Publications TikTok et Instagram des médias suivis sur la période, pour la base de couverture."""
+    import json
+    if not PROFILES_FILE.exists():
+        return {"erreur": "lancer d'abord oriane-find-media (recherche des comptes)"}
+    profiles = json.loads(PROFILES_FILE.read_text())
     api = Oriane()
     after = (datetime.now(timezone.utc).date() - timedelta(days=days)).isoformat()
     report = {}
-    for name, (group, handles) in MEDIA_HANDLES.items():
-        filters = {"profileHandle": {"exactMatch": {"values": handles, "operator": "or"}}, "publishedAt": {"after": after}}
-        try:
-            results, total = api.search(filters, limit=per_account, projection="default")
-        except OrianeCreditsExhausted as e:
-            report["arrêt"] = str(e)
-            break
-        items = [to_item(r, None, 1, kind="media", group=group, media_name=name) for r in results]
-        store.upsert_items(items)
-        report[name] = f"{len(items)} vidéos ({total} sur la période), comptes : {sorted({r.get('profileHandle') for r in results})}"
+    try:
+        for name, info in profiles.items():
+            ids = [c["id"] for c in info["comptes"] if not c.get("exclu")]
+            if not ids:
+                continue
+            items, offset, total = [], 0, None
+            while offset < max_per_account:
+                results, total = api.search({"profileId": {"includes": ids}, "publishedAt": {"after": after}},
+                                            limit=100, offset=offset, projection="default", sort="publishedAt:desc")
+                items += [to_item(r, None, 1, kind="media", group=info["groupe"], media_name=name) for r in results]
+                offset += 100
+                if len(results) < 100 or offset >= total:
+                    break
+            store.upsert_items(items)
+            report[name] = f"{len(items)} publications sur {total} ({days} j)"
+    except OrianeCreditsExhausted as e:
+        report["arrêt"] = str(e)
     report["appels"] = api.calls
     return report
 

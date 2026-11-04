@@ -52,6 +52,9 @@ def run() -> dict:
             "pourquoi_ca_monte": t.get("pourquoi_ca_monte"), "angle_brut": t.get("angle_brut"),
             "prudence": t.get("prudence"), "couvert": t["couvert"], "couvert_par_brut": t["couvert_par_brut"],
             "serie": t["serie"], "video_declencheur": t["video_declencheur"], "imprevu": t.get("imprevu", False),
+            "couverture_presse_depuis": t.get("couverture_presse_depuis"),
+            "couverture_concurrents_depuis": t.get("couverture_concurrents_depuis"),
+            "couverture_complete": t.get("couverture_complete", False),
         })
         position_of = {}
         for n, p in enumerate(t.get("positions", [])):

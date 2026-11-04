@@ -61,7 +61,7 @@ def measure(run_id: str, topics: list[dict], max_topics: int = 3) -> dict:
             "signaux": {**topic["signaux"], "acceleration": round(accel, 2)},
             "volume_mesure": True, "expressions_relance": found.expressions[:5],
         })
-        topic["etat"] = analyze._state(accel, recent, total, topic["couvert"])
+        topic["etat"] = analyze._state(accel, recent, total, topic["couvert"], topic.get("couverture_complete", True))
         report[topic["sujet_type"][:60]] = {"expressions": found.expressions[:5], "vidéos mesurées": total,
                                             "accélération": round(accel, 2), "état": topic["etat"]}
     # Le classement tient compte des nouvelles accélérations.
