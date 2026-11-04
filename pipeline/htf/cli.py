@@ -3,7 +3,7 @@ import argparse
 import json
 from datetime import datetime
 
-from . import analyze, annotate, config, export, showcase, store
+from . import analyze, annotate, config, export, pipeline, showcase, store
 from .sources import fake_social, media, oriane
 
 
@@ -35,6 +35,14 @@ def main() -> None:
     sc = sub.add_parser("showcase", help="fiches Opus pour les premiers sujets + brief (payant)")
     sc.add_argument("--top", type=int, default=config.TOP_TOPICS_SHOWCASE)
     sub.add_parser("export", help="envoyer les résultats dans Supabase (gratuit)")
+    ck = sub.add_parser("check", help="tout vérifier avant de commencer (gratuit)")
+    ck.add_argument("--oriane", action="store_true", help="tester aussi Oriane (1 appel)")
+    rn = sub.add_parser("run", help="chaîne complète : collecte, annotation, analyse, fiches, export")
+    rn.add_argument("--days", type=int, default=17)
+    rn.add_argument("--per-day", type=int, default=30)
+    rn.add_argument("--top", type=int, default=config.TOP_TOPICS_SHOWCASE)
+    rn.add_argument("--no-collect", action="store_true", help="repartir des vidéos déjà collectées")
+    rn.add_argument("--yes", action="store_true", help="ne pas demander de confirmation")
     sub.add_parser("cost", help="dépenses enregistrées")
     args = p.parse_args()
 
@@ -79,6 +87,11 @@ def main() -> None:
         show({"fiches": args.top, "brief": brief, "dépense ($)": round(store.spent(run_id), 4)})
     elif args.cmd == "export":
         show(export.run())
+    elif args.cmd == "check":
+        show(pipeline.check(args.oriane))
+    elif args.cmd == "run":
+        ask = (lambda q: True) if args.yes else (lambda q: input(q + " (oui/non) ").strip().lower() in ("o", "oui", "y", "yes"))
+        show(pipeline.run(run_id, args.days, args.per_day, args.top, not args.no_collect, ask))
     elif args.cmd == "cost":
         show({"total ($)": round(store.spent(), 4), "détail": store.cost_report()})
 

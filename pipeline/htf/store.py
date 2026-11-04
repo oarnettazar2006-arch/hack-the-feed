@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS costs (
 @contextmanager
 def connect():
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(config.DB_PATH)
+    conn = sqlite3.connect(config.DB_PATH, timeout=60)  # écritures concurrentes des threads
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
     try:

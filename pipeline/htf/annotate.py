@@ -3,6 +3,8 @@
 Les vidéos et les articles reçoivent la même consigne de normalisation, pour que leurs vecteurs soient comparables.
 Chaque élément n'est annoté qu'une fois (table `annotations`).
 """
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Literal
 
 from pydantic import BaseModel
@@ -78,9 +80,9 @@ def _annotate(kind: str, run_id: str, limit: int | None, batch_size: int) -> dic
     system, schema, per_item = (
         (SOCIAL_SYSTEM, SocialBatch, 160) if kind == "social" else (MEDIA_SYSTEM, MediaBatch, 90)
     )
-    annotated = 0
-    for start in range(0, len(todo), batch_size):
-        chunk = todo[start:start + batch_size]
+    chunks = [todo[i:i + batch_size] for i in range(0, len(todo), batch_size)]
+
+    def work(chunk: list[dict]) -> int:
         local = {f"e{n}": item["id"] for n, item in enumerate(chunk)}
         prompt = "\n\n".join(f"[e{n}]\n{item['text']}" for n, item in enumerate(chunk))
         result = llm.structured(
@@ -89,12 +91,34 @@ def _annotate(kind: str, run_id: str, limit: int | None, batch_size: int) -> dic
         )
         notes = {local[n.id]: n.model_dump(exclude={"id"}) for n in result.notes if n.id in local}
         store.save_annotations(VERSION, notes)
-        annotated += len(notes)
-    return {"à faire": len(todo), "annotés": annotated, "dépense de l'exécution ($)": round(store.spent(run_id), 4)}
+        return len(notes)
+
+    annotated, errors, stopped, started = 0, [], None, time.time()
+    with ThreadPoolExecutor(max_workers=config.ANNOTATE_WORKERS) as pool:
+        futures = [pool.submit(work, c) for c in chunks]
+        for n, f in enumerate(as_completed(futures), 1):
+            try:
+                annotated += f.result()
+            except llm.BudgetExceeded as e:
+                stopped = str(e)
+                for other in futures:
+                    other.cancel()
+            except Exception as e:  # un paquet en échec sera repris à la prochaine exécution
+                errors.append(f"{e.__class__.__name__}: {str(e)[:120]}")
+            if n % 50 == 0:
+                print(f"  {n}/{len(chunks)} paquets, {store.spent(run_id):.3f} $", flush=True)
+    report = {"à faire": len(todo), "annotés": annotated, "durée (s)": round(time.time() - started),
+              "dépense de l'exécution ($)": round(store.spent(run_id), 4)}
+    if errors:
+        report["paquets en échec (relancer pour les reprendre)"] = len(errors)
+        report["première erreur"] = errors[0]
+    if stopped:
+        report["arrêt budget"] = stopped
+    return report
 
 
 def annotate_social(run_id: str, limit: int | None = None) -> dict:
-    return _annotate("social", run_id, limit, batch_size=10)
+    return _annotate("social", run_id, limit, batch_size=12)
 
 
 def annotate_media(run_id: str, limit: int | None = None) -> dict:

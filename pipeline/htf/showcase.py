@@ -1,5 +1,6 @@
 """Fiches sujets rédigées par Opus (seulement pour les sujets affichés) et brief du matin assemblé sans appel en plus."""
 import json
+from concurrent.futures import ThreadPoolExecutor
 
 from pydantic import BaseModel
 
@@ -54,8 +55,8 @@ def _prompt(topic: dict, local: dict[str, str]) -> str:
 
 def build_cards(run_id: str, topics: list[dict], top: int) -> list[dict]:
     items = {i["id"]: i for i in store.load_items("social")}
-    cards = []
-    for topic in topics[:top]:
+
+    def card_for(topic: dict) -> dict:
         local = {f"v{n}": a["video"] for n, a in enumerate(topic["affirmations"])}
         card = llm.structured(
             run_id=run_id, purpose="fiche sujet", model=config.MODEL_SHOWCASE, effort=config.EFFORT_SHOWCASE,
@@ -71,8 +72,11 @@ def build_cards(run_id: str, topics: list[dict], top: int) -> list[dict]:
                 "vues": sum(m.get("views") or 0 for m in metrics),
                 "partages": sum(m.get("shares", 0) for m in metrics),
             })
-        cards.append({**topic, "titre": card.titre, "pourquoi_ca_monte": card.pourquoi_ca_monte,
-                      "positions": positions, "angle_brut": card.angle_brut, "prudence": card.prudence})
+        return {**topic, "titre": card.titre, "pourquoi_ca_monte": card.pourquoi_ca_monte,
+                "positions": positions, "angle_brut": card.angle_brut, "prudence": card.prudence}
+
+    with ThreadPoolExecutor(max_workers=config.SHOWCASE_WORKERS) as pool:
+        cards = list(pool.map(card_for, topics[:top]))  # garde l'ordre du classement
     return cards + topics[top:]
 
 

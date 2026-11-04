@@ -25,7 +25,12 @@ PRICES = {
 
 # Budget : 20 € de crédit, plafond dur. On garde une marge.
 BUDGET_TOTAL_USD = 18.0
-BUDGET_RUN_USD = 2.0
+BUDGET_RUN_USD = 4.0         # une annotation complète du samedi (~14 000 vidéos) est estimée à ~2 $
+
+# Parallélisme (limites du compte Anthropic au 4/11 : 13 000 requêtes/min).
+ANNOTATE_WORKERS = 16        # mesuré : 8 threads = 14 vidéos/s
+SHOWCASE_WORKERS = 4
+ORIANE_WORKERS = 4           # limites de débit Oriane inconnues : prudence, 429 gérés par reprise
 
 # Embeddings locaux via Ollama.
 OLLAMA_URL = "http://localhost:11434"

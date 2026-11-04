@@ -9,11 +9,12 @@ Les appels consomment des crédits Oriane : `plan()` affiche le nombre d'appels 
 import csv
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 
 import httpx
 
-from .. import store
+from .. import config, store
 
 BASE_URL = "https://connect.oriane.xyz"
 MAX_TEXT = 1800  # caractères envoyés au LLM par vidéo
@@ -246,28 +247,36 @@ def collect_social(days: int, per_day: int, themes: list[str] | None = None,
             _, day_totals[day] = api.search({**base, "publishedAt": {"after": day, "before": day}}, [FRENCH],
                                             limit=1, projection="basic")
         reference = sorted(day_totals.values())[len(day_totals) // 2] or 1
-        for theme in themes:
-            for day in day_list:
-                filters = {**base, "publishedAt": {"after": day, "before": day}}
-                # Le filet aveugle prend plus de vidéos : il couvre tout, et beaucoup seront écartées.
-                limit = min(100, per_day * 3) if theme == BLIND_NET else per_day
-                results, total = api.search(filters, theme_queries(theme), limit=limit,
-                                            sort="interactionsCount:desc")
-                totals[f"{theme}|{day}"] = total
-                if theme == BLIND_NET:
-                    # Échantillon des plus viraux, pas représentatif : sert à découvrir, pas à mesurer.
-                    # Une vidéo déjà ramenée par un thème garde le poids de ce thème.
-                    known = store.existing_ids([f"oriane:{r['id']}" for r in results])
-                    saved += store.upsert_items([to_item(r, theme, 1) for r in results
-                                                 if f"oriane:{r['id']}" not in known])
-                    continue
-                completeness = day_totals[day] / reference if day_totals[day] else 0
-                weight = total / len(results) / completeness if results and completeness else 0
-                saved += store.upsert_items([to_item(r, theme, weight) for r in results])
+        # Enregistré tout de suite : utile même si la collecte s'arrête faute de crédits.
+        store.cache_set("oriane:day_completeness", {d: round(t / reference, 3) for d, t in day_totals.items()})
+
+        def one(theme: str, day: str) -> int:
+            filters = {**base, "publishedAt": {"after": day, "before": day}}
+            # Le filet aveugle prend plus de vidéos : il couvre tout, et beaucoup seront écartées.
+            limit = min(100, per_day * 3) if theme == BLIND_NET else per_day
+            results, total = api.search(filters, theme_queries(theme), limit=limit, sort="interactionsCount:desc")
+            totals[f"{theme}|{day}"] = total
+            if theme == BLIND_NET:
+                # Échantillon des plus viraux, pas représentatif : sert à découvrir, pas à mesurer.
+                # Une vidéo déjà ramenée par un thème garde le poids de ce thème.
+                known = store.existing_ids([f"oriane:{r['id']}" for r in results])
+                return store.upsert_items([to_item(r, theme, 1) for r in results if f"oriane:{r['id']}" not in known])
+            completeness = day_totals[day] / reference if day_totals[day] else 0
+            weight = total / len(results) / completeness if results and completeness else 0
+            return store.upsert_items([to_item(r, theme, weight) for r in results])
+
+        # Thèmes d'abord, filet aveugle en dernier (il ne doit pas écraser les poids des thèmes).
+        jobs = [(t, d) for t in themes if t != BLIND_NET for d in day_list]
+        blind = [(BLIND_NET, d) for d in day_list] if BLIND_NET in themes else []
+        for batch in (jobs, blind):
+            with ThreadPoolExecutor(max_workers=config.ORIANE_WORKERS) as pool:
+                for n, got in enumerate(pool.map(lambda job: one(*job), batch), 1):
+                    saved += got
+                    if n % 50 == 0:
+                        print(f"  {n}/{len(batch)} requêtes, {saved} vidéos", flush=True)
     except OrianeCreditsExhausted as e:
         return {"arrêt": str(e), "vidéos enregistrées": saved, "appels": api.calls}
     store.cache_set("oriane:totals", totals)
-    store.cache_set("oriane:day_completeness", {d: round(t / reference, 3) for d, t in day_totals.items()})
     return {"vidéos enregistrées": saved, "appels": api.calls,
             "complétude de l'index par jour": {d: round(t / reference, 2) for d, t in sorted(day_totals.items())}}
 
