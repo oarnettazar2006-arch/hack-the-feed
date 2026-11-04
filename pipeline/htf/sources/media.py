@@ -137,5 +137,7 @@ def collect(days: int = 14) -> dict:
         report["Site Brut (sitemaps)"] = len(got)
     except Exception as e:
         report["Site Brut (sitemaps)"] = f"erreur : {e.__class__.__name__}"
-    report["nouveaux"] = store.upsert_items(items)
+    report["nouveaux (RSS, YouTube, Brut)"] = store.upsert_items(items)
+    from . import archives  # historique 14 jours de la presse (sitemaps)
+    report["archives presse"] = archives.collect(days)
     return report
