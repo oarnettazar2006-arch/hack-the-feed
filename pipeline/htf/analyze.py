@@ -51,7 +51,14 @@ def run(now: datetime | None = None) -> list[dict]:
     medias = [m for m in store.load_items("media") if m["id"] in notes]
     if not videos:
         return []
+    # Avec Oriane, le score s'arrête au dernier jour indexé à au moins 50 % (les jours suivants sont ignorés).
+    completeness = store.cache_get("oriane:day_completeness") or {}
+    if now is None and completeness:
+        complete_days = [d for d, c in completeness.items() if c >= 0.5]
+        if complete_days:
+            now = datetime.fromisoformat(max(complete_days) + "T23:59:59+00:00")
     now = now or max(_day(v["published_at"]) for v in videos)
+    videos = [v for v in videos if _day(v["published_at"]) <= now]
     recent_start = now - timedelta(days=config.WINDOW_RECENT)
     base_start = recent_start - timedelta(days=config.WINDOW_BASELINE)
 

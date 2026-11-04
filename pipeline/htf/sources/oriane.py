@@ -164,7 +164,7 @@ def to_item(r: dict, theme: str | None, weight: float, kind: str = "social", gro
 
 def plan(days: int, per_day: int, themes: list[str] | None = None, media: bool = True) -> dict:
     themes = themes or list(THEMES)
-    social_calls = days * len(themes)
+    social_calls = days * len(themes) + days  # + 1 appel par jour pour le total des vidéos françaises
     media_calls = len(MEDIA_HANDLES) if media else 0
     return {"thèmes": len(themes), "jours": days, "vidéos max par thème et par jour": per_day,
             "appels sociaux": social_calls, "appels médias": media_calls,
@@ -174,27 +174,38 @@ def plan(days: int, per_day: int, themes: list[str] | None = None, media: bool =
 
 def collect_social(days: int, per_day: int, themes: list[str] | None = None,
                    platforms: tuple[str, ...] = ("tiktok", "instagram")) -> dict:
-    """Une requête par thème et par jour. Enregistre les vidéos avec leur poids et les totaux par jour."""
+    """Une requête par thème et par jour. Enregistre les vidéos avec leur poids et les totaux par jour.
+
+    L'index Oriane se remplit progressivement : les derniers jours sont incomplets (constaté le 4/11 :
+    dernière semaine ~10 fois moins fournie). On mesure donc chaque jour le total des vidéos françaises
+    indexées, et le poids de chaque vidéo est ramené à un jour « complet » (total médian).
+    """
     api = Oriane()
     themes = themes or list(THEMES)
     today = datetime.now(timezone.utc).date()
-    totals, saved = {}, 0
+    base = {"platform": {"includes": list(platforms)}, "format": {"includes": ["video"]}}
+    day_list = [(today - timedelta(days=d)).isoformat() for d in range(days)]
+    totals, day_totals, saved = {}, {}, 0
     try:
+        for day in day_list:
+            _, day_totals[day] = api.search({**base, "publishedAt": {"after": day, "before": day}}, [FRENCH],
+                                            limit=1, projection="basic")
+        reference = sorted(day_totals.values())[len(day_totals) // 2] or 1
         for theme in themes:
-            for d in range(days):
-                day = (today - timedelta(days=d)).isoformat()
-                filters = {"platform": {"includes": list(platforms)}, "format": {"includes": ["video"]},
-                           "publishedAt": {"after": day, "before": day}}
+            for day in day_list:
+                filters = {**base, "publishedAt": {"after": day, "before": day}}
                 results, total = api.search(filters, [FRENCH, theme_query(theme, THEMES[theme])],
                                             limit=per_day, sort="interactionsCount:desc")
                 totals[f"{theme}|{day}"] = total
-                weight = total / len(results) if results else 0
+                completeness = day_totals[day] / reference if day_totals[day] else 0
+                weight = total / len(results) / completeness if results and completeness else 0
                 saved += store.upsert_items([to_item(r, theme, weight) for r in results])
     except OrianeCreditsExhausted as e:
         return {"arrêt": str(e), "vidéos enregistrées": saved, "appels": api.calls}
     store.cache_set("oriane:totals", totals)
+    store.cache_set("oriane:day_completeness", {d: round(t / reference, 3) for d, t in day_totals.items()})
     return {"vidéos enregistrées": saved, "appels": api.calls,
-            "total de vidéos réelles estimé": sum(totals.values())}
+            "complétude de l'index par jour": {d: round(t / reference, 2) for d, t in sorted(day_totals.items())}}
 
 
 def collect_media(days: int = 14, per_account: int = 100) -> dict:
