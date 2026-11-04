@@ -121,11 +121,11 @@ def test_brief_perime_jamais_exporte(monkeypatch):
 def test_couverture_connue_depuis():
     from htf.analyze import coverage_known_since
 
-    def m(acc, group, day):
-        return {"account": acc, "account_group": group, "published_at": f"{day}T08:00:00+00:00"}
+    def m(acc, source, day):
+        return {"account": acc, "source": source, "published_at": f"{day}T08:00:00+00:00"}
 
-    medias = [m("Le Monde", "traditionnel", f"2026-10-{d}") for d in range(21, 31)]
-    medias += [m("HugoDécrypte", "concurrent", f"2026-10-{d}") for d in range(27, 31)] + [m("HugoDécrypte", "concurrent", "2026-10-31")]
-    medias += [m("Petit blog", "gauche", "2026-10-30")]  # trop peu de contenus : ignoré
+    medias = [m("Le Monde", "archive", f"2026-10-{d}") for d in range(21, 31)]
+    medias += [m("HugoDécrypte", "youtube", f"2026-10-{d}") for d in range(27, 31)] + [m("HugoDécrypte", "youtube", "2026-10-31")]
+    medias += [m("CNews", "youtube", "2026-10-30")]  # trop peu de contenus : ignoré
     known = coverage_known_since(medias)
     assert known == {"presse": "2026-10-21", "concurrents": "2026-10-27"}

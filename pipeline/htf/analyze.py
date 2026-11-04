@@ -84,23 +84,28 @@ def coordination(members: list[dict]) -> dict | None:
             "exemple": example["text"][:200]}
 
 
-PRESS_GROUPS = {"traditionnel", "droite", "gauche"}
-SOCIAL_GROUPS = {"brut", "concurrent"}
+# Familles par type de source (et non par orientation) : la presse écrite a 14 jours d'archives,
+# les vidéos sur les réseaux (YouTube, puis TikTok/Instagram via Oriane) ont leur propre historique.
+PRESS_SOURCES = {"rss", "archive", "brut"}
+SOCIAL_SOURCES = {"youtube", "oriane"}
 
 
 def coverage_known_since(medias: list[dict]) -> dict:
-    """Pour chaque famille de médias, la date depuis laquelle TOUTES ses sources régulières sont connues.
+    """Pour chaque famille de sources, la date depuis laquelle toutes ses sources régulières sont connues.
 
+    Une même rédaction peut apparaître dans les deux familles (Le Monde : articles et vidéos).
     Une source qui n'a que 1 à 4 contenus est ignorée (trop peu pour dater sa couverture).
     """
-    starts: dict[str, dict[str, str]] = {"presse": {}, "concurrents": {}}
-    counts = Counter(m["account"] for m in medias)
+    starts: dict[str, dict[str, list[str]]] = {"presse": {}, "concurrents": {}}
     for m in medias:
-        family = "presse" if m["account_group"] in PRESS_GROUPS else "concurrents" if m["account_group"] in SOCIAL_GROUPS else None
-        if family and counts[m["account"]] >= 5:
-            day = m["published_at"][:10]
-            starts[family][m["account"]] = min(day, starts[family].get(m["account"], day))
-    return {family: (max(v.values()) if v else None) for family, v in starts.items()}
+        family = "presse" if m["source"] in PRESS_SOURCES else "concurrents" if m["source"] in SOCIAL_SOURCES else None
+        if family:
+            starts[family].setdefault(m["account"], []).append(m["published_at"][:10])
+    known = {}
+    for family, by_account in starts.items():
+        firsts = [min(days) for days in by_account.values() if len(days) >= 5]
+        known[family] = max(firsts) if firsts else None
+    return known
 
 
 def _state(accel: float, recent: int, total: int, covered: bool, coverage_complete: bool = True) -> str:
