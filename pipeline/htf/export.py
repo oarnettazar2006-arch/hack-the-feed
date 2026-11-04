@@ -27,6 +27,8 @@ def _insert(http: httpx.Client, table: str, rows: list[dict]) -> None:
 def run() -> dict:
     topics = json.loads((config.OUT_DIR / "topics.json").read_text())
     brief = json.loads((config.OUT_DIR / "brief.json").read_text())
+    people_path = config.OUT_DIR / "people.json"
+    persons = json.loads(people_path.read_text()) if people_path.exists() else []
     notes = store.get_annotations(annotate.VERSION)
     items = {i["id"]: i for i in store.load_items("social")}
 
@@ -65,6 +67,7 @@ def run() -> dict:
         # Instantané : on vide puis on remplit. Les tables filles partent en cascade.
         http.delete("/brief", params={"id": "not.is.null"}).raise_for_status()
         http.delete("/topics", params={"id": "not.is.null"}).raise_for_status()
+        http.delete("/personnalites", params={"id": "not.is.null"}).raise_for_status()
         _insert(http, "topics", topic_rows)
         _insert(http, "topic_positions", positions)
         _insert(http, "topic_coverage", coverage)
@@ -72,5 +75,8 @@ def run() -> dict:
         _insert(http, "brief", [{"ordre": n, "topic_id": b["sujet"], "titre": b["titre"], "etat": b["etat"],
                                  "pourquoi": b["pourquoi"], "angle": b["angle"],
                                  "deja_traite_par": b["deja_traite_par"]} for n, b in enumerate(brief)])
+        _insert(http, "personnalites", [{"rang": n + 1, **{k: p[k] for k in (
+            "nom", "hors_liste", "videos_total", "videos_recentes", "acceleration", "createurs_recents", "score",
+            "tons", "affirmations")}} for n, p in enumerate(persons)])
     return {"sujets": len(topic_rows), "positions": len(positions), "couverture": len(coverage),
-            "vidéos": len(videos), "brief": len(brief)}
+            "vidéos": len(videos), "brief": len(brief), "personnalités": len(persons)}

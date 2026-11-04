@@ -137,6 +137,22 @@ TOPICS = {
         "visual": ["des poubelles devant l'entrée d'un lycée", "des CRS face à des lycéens", "une lycéenne face caméra"],
         "captions": ["on lâche rien ✊", "#blocus #lycee"],
     },
+    # Personnalité fictive qui émerge, absente des listes de noms : l'outil doit la repérer seul.
+    "candidature_surprise": {
+        "daily": lambda d: 0 if d < 12 else [2, 5, 9, 14, 18][d - 12],
+        "overperf": 4.5,
+        "lines": {
+            "pour": ["Hugo Vernay, le maire qui a baissé les impôts locaux, annonce sa candidature, enfin quelqu'un de concret.",
+                     "Hugo Vernay candidat en 2027 : un élu de terrain face aux appareils de partis, ça change."],
+            "contre": ["Hugo Vernay se déclare candidat mais personne ne connaît son programme, c'est du marketing.",
+                       "La candidature d'Hugo Vernay, c'est un coup de com' sans aucune équipe derrière."],
+            "ironique": ["Hugo Vernay candidat, prochaine étape : président du conseil syndical de mon immeuble."],
+            "informatif": ["Qui est Hugo Vernay, le maire qui vient d'annoncer sa candidature à la présidentielle ?"],
+        },
+        "screen": ["Hugo Vernay candidat", "QUI EST HUGO VERNAY ?", "2027 : un nouveau candidat"],
+        "visual": ["un homme en costume annonce sa candidature devant une mairie", "extrait d'un journal télévisé régional"],
+        "captions": ["vous le connaissiez ?", "#presidentielle2027"],
+    },
 }
 
 CREATOR_POOL = 400

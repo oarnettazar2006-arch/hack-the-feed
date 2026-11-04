@@ -1,4 +1,5 @@
 """Regroupement des vidéos en sujets, score d'émergence, état et couverture médias. Aucun appel payant."""
+import unicodedata
 from collections import Counter
 from datetime import datetime, timedelta
 
@@ -175,3 +176,58 @@ def run(now: datetime | None = None) -> list[dict]:
         t["rang"] = rank
         t["score"] = round(float(t["score"]), 3)
     return topics
+
+
+def _name_key(name: str) -> str:
+    plain = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()
+    return " ".join(plain.replace("-", " ").split())
+
+
+def people(now: datetime | None = None) -> list[dict]:
+    """Personnalités citées dans les vidéos, classées par émergence. Signale celles absentes de nos listes."""
+    from .sources.oriane import CANDIDATES, PUBLIC_FIGURES
+
+    notes = store.get_annotations(annotate.VERSION)
+    videos = [v for v in store.load_items("social")
+              if v["id"] in notes and notes[v["id"]]["interet_public"] and notes[v["id"]].get("personnalites")]
+    if not videos:
+        return []
+    now = now or max(_day(v["published_at"]) for v in videos)
+    recent_start = now - timedelta(days=config.WINDOW_RECENT)
+    base_start = recent_start - timedelta(days=config.WINDOW_BASELINE)
+    known = {_name_key(n) for n in CANDIDATES + PUBLIC_FIGURES}
+    known_last = {k.split()[-1] for k in known}
+
+    mentions: dict[str, list[dict]] = {}
+    spellings: dict[str, Counter] = {}
+    for v in videos:
+        for name in set(notes[v["id"]]["personnalites"]):
+            key = _name_key(name)
+            if len(key.split()) < 2:  # un nom seul (« Lisnard ») est rattaché au nom complet s'il existe
+                key = next((k for k in mentions if k.split()[-1] == key), key)
+            mentions.setdefault(key, []).append(v)
+            spellings.setdefault(key, Counter())[name] += 1
+
+    out = []
+    for key, vids in mentions.items():
+        vids = [v for v in vids if _day(v["published_at"]) <= now]
+        recent = [v for v in vids if _day(v["published_at"]) >= recent_start]
+        base = [v for v in vids if base_start <= _day(v["published_at"]) < recent_start]
+        creators = len({v["account"] for v in recent})
+        if len(vids) < config.MIN_VIDEOS // 2 or creators < 3:
+            continue
+        accel = (sum(map(_w, recent)) / config.WINDOW_RECENT + 1) / (sum(map(_w, base)) / config.WINDOW_BASELINE + 1)
+        out.append({
+            "nom": spellings[key].most_common(1)[0][0],
+            "hors_liste": key not in known and key.split()[-1] not in known_last,
+            "videos_total": round(sum(map(_w, vids))),
+            "videos_recentes": round(sum(map(_w, recent))),
+            "acceleration": round(accel, 2),
+            "createurs_recents": creators,
+            "score": round(accel * np.sqrt(creators), 3),
+            "tons": dict(Counter(notes[v["id"]]["ton"] for v in vids)),
+            "affirmations": [notes[v["id"]]["affirmation"] for v in sorted(recent, key=lambda v: -_w(v))[:5]],
+            "videos": [v["id"] for v in vids],
+        })
+    out.sort(key=lambda p: (-p["score"]))
+    return out

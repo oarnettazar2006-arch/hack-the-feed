@@ -18,26 +18,63 @@ from .. import store
 BASE_URL = "https://connect.oriane.xyz"
 MAX_TEXT = 1800  # caractères envoyés au LLM par vidéo
 
-# Mots-clés par thème. Chaque expression est cherchée (tous ses mots, dans n'importe quel ordre)
-# dans la transcription, le texte à l'écran et la légende. À ajuster samedi selon les premiers résultats.
+# Filets de collecte. Ce ne sont pas les sujets affichés : le regroupement les découpe ensuite.
+# Chaque expression exige tous ses mots (dans n'importe quel ordre, mots partiels acceptés),
+# d'où des expressions de 2-3 mots et aucun mot court ambigu (« IA », « RN », « voile »).
+# Personnalités : candidatures recensées par Touteleurope au 3/11/2026
+# (https://www.touteleurope.eu/vie-politique-des-etats-membres/presidentielle-2027-qui-sont-les-candidats-deja-declares/)
+# + personnalités très présentes dans le débat. Les noms absents sont rattrapés par les filets génériques
+# du thème « campagne 2027 » et par la détection des personnalités émergentes (analyze.people).
+CANDIDATES = [
+    "Édouard Philippe", "Gabriel Attal", "Olivier Becht", "Dominique de Villepin", "Bernard Cazeneuve",
+    "Karim Bouamrane", "Marine Le Pen", "Jean-Luc Mélenchon", "Raphaël Glucksmann", "Marine Tondelier",
+    "Delphine Batho", "François Ruffin", "Fabien Roussel", "François Hollande", "Bruno Retailleau",
+    "David Lisnard", "Xavier Bertrand", "Éric Zemmour", "Nathalie Arthaud", "Nicolas Dupont-Aignan",
+    "Florian Philippot", "François Asselineau", "Clara Egger", "Anasse Kazib", "Selma Labib", "Juan Branco",
+    "Natacha Polony", "Francis Lalanne", "Olivier Faure", "Ségolène Royal",
+]
+PUBLIC_FIGURES = ["Jordan Bardella", "Emmanuel Macron", "Marion Maréchal", "Sarah Knafo", "Laurent Wauquiez"]
+
 THEMES = {
-    "logement": ["loyer", "logement étudiant", "propriétaire", "expulsion", "HLM", "crise du logement"],
-    "pouvoir d'achat": ["pouvoir d'achat", "prix courses", "inflation", "fin de mois", "smic", "salaire"],
-    "carburant et énergie": ["prix essence", "carburant", "facture électricité", "prix gaz"],
-    "emploi": ["chômage", "licenciement", "premier emploi", "stage", "retraite", "réforme des retraites"],
-    "sécurité et police": ["police", "CRS", "violences policières", "insécurité", "délinquance", "vidéosurveillance"],
-    "justice": ["procès", "tribunal", "garde à vue", "condamné"],
-    "immigration": ["immigration", "migrants", "titre de séjour", "OQTF", "expulsé"],
-    "écologie": ["climat", "canicule", "sécheresse", "pollution", "écologie", "inondations"],
-    "santé": ["hôpital", "urgences", "maternité", "médecin", "désert médical"],
-    "éducation": ["lycée", "blocus", "Parcoursup", "prof absent", "université", "bourse étudiante"],
-    "numérique et IA": ["intelligence artificielle", "ChatGPT", "IA emploi", "réseaux sociaux interdits"],
-    "institutions et élections": ["présidentielle", "2027", "Assemblée nationale", "gouvernement", "49.3",
-                                  "dissolution", "Premier ministre", "élections", "sondage"],
-    "discriminations": ["racisme", "homophobie", "sexisme", "discrimination", "islamophobie", "antisémitisme"],
-    "transports": ["SNCF", "grève", "train annulé", "transports en commun"],
-    "agriculture": ["agriculteurs", "paysans", "Mercosur"],
-    "international": ["Gaza", "Ukraine", "Trump", "guerre"],
+    "campagne 2027 : personnalités": CANDIDATES + PUBLIC_FIGURES,
+    "campagne 2027 : candidatures et partis": [
+        "élection présidentielle", "présidentielle 2027", "candidat présidentielle", "ma candidature",
+        "serai candidat", "serai candidate", "parrainages", "sondage présidentielle", "Rassemblement national",
+        "France insoumise", "parti Renaissance", "Les Républicains", "Parti socialiste", "Reconquête Zemmour",
+        "Les Écologistes", "Parti communiste", "primaire de la gauche"],
+    "institutions": ["Assemblée nationale", "motion de censure", "49.3", "dissolution Assemblée",
+                     "Premier ministre", "Conseil constitutionnel", "référendum"],
+    "budget, dette, impôts": ["dette publique", "budget État", "déficit public", "hausse des impôts",
+                              "taxe Zucman", "niches fiscales"],
+    "retraites": ["réforme des retraites", "âge de départ retraite", "montant des pensions"],
+    "pouvoir d'achat": ["pouvoir d'achat", "prix des courses", "fin du mois", "smic",
+                        "augmentation des salaires", "inflation"],
+    "logement": ["loyer", "logement étudiant", "crise du logement", "logement social", "expulsion locative"],
+    "énergie et carburant": ["prix essence", "prix carburant", "facture électricité", "centrale nucléaire",
+                             "prix du gaz"],
+    "travail et emploi": ["chômage", "licenciement", "plan social", "premier emploi", "assurance chômage",
+                          "semaine de quatre jours"],
+    "santé et services publics": ["urgences hôpital", "désert médical", "fermeture maternité",
+                                  "médecin généraliste", "sécurité sociale"],
+    "éducation et jeunesse": ["blocus lycée", "Parcoursup", "professeurs absents", "harcèlement scolaire",
+                              "précarité étudiante", "bourse étudiante"],
+    "sécurité": ["insécurité", "narcotrafic", "violences policières", "vidéosurveillance", "délinquance",
+                 "fusillade"],
+    "justice": ["décision de justice", "peine de prison", "garde à vue", "magistrats", "condamné à"],
+    "immigration": ["immigration", "titre de séjour", "OQTF", "sans-papiers", "régularisation",
+                    "droit d'asile"],
+    "laïcité et religion": ["laïcité", "port du voile", "abaya", "islamisme"],
+    "discriminations et violences": ["racisme", "homophobie", "sexisme", "antisémitisme", "islamophobie",
+                                     "féminicide", "violences sexuelles"],
+    "écologie et climat": ["réchauffement climatique", "canicule", "sécheresse", "inondations", "pollution",
+                           "biodiversité"],
+    "agriculture": ["agriculteurs", "colère agricole", "Mercosur", "pesticides"],
+    "transports": ["grève SNCF", "train annulé", "prix billet train", "transports en commun", "ZFE"],
+    "numérique et IA": ["intelligence artificielle", "ChatGPT", "interdiction réseaux sociaux",
+                        "majorité numérique", "deepfake"],
+    "outre-mer": ["Nouvelle-Calédonie", "Mayotte", "vie chère Guadeloupe", "Martinique"],
+    "société": ["fin de vie", "aide à mourir", "IVG", "PMA", "légalisation cannabis"],
+    "international vu de France": ["Gaza", "Ukraine", "Trump", "Israël", "Iran"],
 }
 
 # Comptes TikTok et Instagram des médias, pour la base de couverture. À vérifier samedi (handles exacts).

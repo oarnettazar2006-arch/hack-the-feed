@@ -63,6 +63,9 @@ def main() -> None:
         topics = analyze.run()
         config.OUT_DIR.mkdir(parents=True, exist_ok=True)
         (config.OUT_DIR / "topics.json").write_text(json.dumps(topics, ensure_ascii=False, indent=2))
+        persons = analyze.people()
+        (config.OUT_DIR / "people.json").write_text(json.dumps(persons, ensure_ascii=False, indent=2))
+        show([{k: p[k] for k in ("nom", "hors_liste", "videos_total", "acceleration", "createurs_recents")} for p in persons[:10]])
         show([{k: t[k] for k in ("rang", "etat", "sujet_type", "videos_total", "videos_recentes", "signaux", "couvert")}
               for t in topics])
     elif args.cmd == "showcase":

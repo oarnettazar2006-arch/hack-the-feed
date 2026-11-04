@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from . import config, llm, store
 
-VERSION = "v1"
+VERSION = "v2"  # v2 : ajout des personnalités citées
 
 SUJET_RULES = """Règles pour « sujet » :
 - une phrase neutre de 6 à 15 mots qui dit de quoi on parle concrètement, comme un titre de dépêche AFP ;
@@ -30,7 +30,10 @@ Autres champs :
 - interet_public : faux pour le divertissement, les clashs entre influenceurs, les recettes, la mode, le sport sans enjeu de société ;
 - themes : 1 à 3 thèmes pris uniquement dans cette liste : {", ".join(config.THEMES)} ;
 - ton : favorable, critique, ironique (moquerie, second degré), informatif (explique sans prendre parti), incertain (impossible à dire) ;
-- affirmation : en une phrase, ce que la vidéo affirme ou défend sur le sujet, reformulé sans citer le créateur.
+- affirmation : en une phrase, ce que la vidéo affirme ou défend sur le sujet, reformulé sans citer le créateur ;
+- personnalites : prénom et nom complets, orthographe officielle, des personnalités publiques (élus, candidats,
+  ministres, militants connus, dirigeants) citées, montrées ou visées par la vidéo. Liste vide s'il n'y en a pas.
+  Jamais le créateur de la vidéo ni une personne privée.
 
 Réponds pour chaque vidéo, avec son identifiant."""
 
@@ -51,6 +54,7 @@ class SocialNote(BaseModel):
     themes: list[str]
     ton: Literal["favorable", "critique", "ironique", "informatif", "incertain"]
     affirmation: str
+    personnalites: list[str]
 
 
 class SocialBatch(BaseModel):
