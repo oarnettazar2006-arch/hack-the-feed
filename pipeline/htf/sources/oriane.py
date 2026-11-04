@@ -75,7 +75,17 @@ THEMES = {
     "outre-mer": ["Nouvelle-Calédonie", "Mayotte", "vie chère Guadeloupe", "Martinique"],
     "société": ["fin de vie", "aide à mourir", "IVG", "PMA", "légalisation cannabis"],
     "international vu de France": ["Gaza", "Ukraine", "Trump", "Israël", "Iran"],
+    # Filet de cadrage : formules qu'emploient les créateurs sur un sujet de société, quel qu'il soit.
+    # Attrape l'imprévu par la forme, pas par le fond. « Personne n'en parle » signale aussi un angle mort.
+    "signaux d'actualité": [
+        "personne n'en parle", "médias n'en parlent pas", "il faut qu'on parle", "on vous explique",
+        "c'est un scandale", "c'est honteux", "inadmissible", "partagez au maximum", "ce qui se passe en France",
+        "polémique", "indignation", "pétition", "manifestation", "mobilisation", "on lâche rien"],
 }
+
+# Filet aveugle : chaque jour, les vidéos françaises les plus commentées et partagées, sans mot-clé.
+# Le filtre d'intérêt public (annotation) écarte le divertissement ; il reste l'actualité imprévue.
+BLIND_NET = "veille ouverte"
 
 # Comptes TikTok et Instagram des médias, pour la base de couverture. À vérifier samedi (handles exacts).
 MEDIA_HANDLES = {
@@ -151,6 +161,13 @@ def _text_filter(terms: list[str]) -> dict:
     return {"includesFuzzy": {"values": terms, "operator": "or"}}
 
 
+def theme_queries(theme: str) -> list[dict]:
+    """Requêtes imbriquées d'un thème (le filet aveugle n'a que le filtre de langue)."""
+    if theme == BLIND_NET:
+        return [FRENCH]
+    return [FRENCH, theme_query(theme, THEMES[theme])]
+
+
 def theme_query(name: str, terms: list[str]) -> dict:
     """Un groupe nommé : l'un des termes dans la transcription, le texte à l'écran ou la légende."""
     return {"name": name, "operator": "or",
@@ -201,7 +218,7 @@ def to_item(r: dict, theme: str | None, weight: float, kind: str = "social", gro
 
 
 def plan(days: int, per_day: int, themes: list[str] | None = None, media: bool = True) -> dict:
-    themes = themes or list(THEMES)
+    themes = themes or list(THEMES) + [BLIND_NET]
     social_calls = days * len(themes) + days  # + 1 appel par jour pour le total des vidéos françaises
     media_calls = len(MEDIA_HANDLES) if media else 0
     return {"thèmes": len(themes), "jours": days, "vidéos max par thème et par jour": per_day,
@@ -219,7 +236,7 @@ def collect_social(days: int, per_day: int, themes: list[str] | None = None,
     indexées, et le poids de chaque vidéo est ramené à un jour « complet » (total médian).
     """
     api = Oriane()
-    themes = themes or list(THEMES)
+    themes = themes or list(THEMES) + [BLIND_NET]
     today = datetime.now(timezone.utc).date()
     base = {"platform": {"includes": list(platforms)}, "format": {"includes": ["video"]}}
     day_list = [(today - timedelta(days=d)).isoformat() for d in range(days)]
@@ -232,9 +249,18 @@ def collect_social(days: int, per_day: int, themes: list[str] | None = None,
         for theme in themes:
             for day in day_list:
                 filters = {**base, "publishedAt": {"after": day, "before": day}}
-                results, total = api.search(filters, [FRENCH, theme_query(theme, THEMES[theme])],
-                                            limit=per_day, sort="interactionsCount:desc")
+                # Le filet aveugle prend plus de vidéos : il couvre tout, et beaucoup seront écartées.
+                limit = min(100, per_day * 3) if theme == BLIND_NET else per_day
+                results, total = api.search(filters, theme_queries(theme), limit=limit,
+                                            sort="interactionsCount:desc")
                 totals[f"{theme}|{day}"] = total
+                if theme == BLIND_NET:
+                    # Échantillon des plus viraux, pas représentatif : sert à découvrir, pas à mesurer.
+                    # Une vidéo déjà ramenée par un thème garde le poids de ce thème.
+                    known = store.existing_ids([f"oriane:{r['id']}" for r in results])
+                    saved += store.upsert_items([to_item(r, theme, 1) for r in results
+                                                 if f"oriane:{r['id']}" not in known])
+                    continue
                 completeness = day_totals[day] / reference if day_totals[day] else 0
                 weight = total / len(results) / completeness if results and completeness else 0
                 saved += store.upsert_items([to_item(r, theme, weight) for r in results])

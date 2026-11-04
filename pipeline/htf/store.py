@@ -70,6 +70,12 @@ def upsert_items(items: list[dict]) -> int:
         return conn.execute("SELECT COUNT(*) FROM items").fetchone()[0] - before
 
 
+def existing_ids(ids: list[str]) -> set[str]:
+    with connect() as conn:
+        marks = ",".join("?" * len(ids)) or "''"
+        return {r["id"] for r in conn.execute(f"SELECT id FROM items WHERE id IN ({marks})", ids)}
+
+
 def load_items(kind: str) -> list[dict]:
     with connect() as conn:
         rows = conn.execute("SELECT * FROM items WHERE kind = ? ORDER BY published_at", (kind,)).fetchall()

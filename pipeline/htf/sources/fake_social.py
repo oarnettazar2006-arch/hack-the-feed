@@ -196,6 +196,8 @@ def generate(seed: int = 7, days: int = 17, scale: float = 1.0) -> int:
                         "platform": rng.choice(["tiktok", "instagram"]),
                         "truth_topic": topic,      # vérité terrain, pour évaluer le regroupement
                         "truth_stance": stance,
+                        # La candidature surprise simule un sujet ramené uniquement par le filet aveugle.
+                        "theme_query": "veille ouverte" if topic == "candidature_surprise" else "fake",
                     },
                 })
     return store.upsert_items(items)

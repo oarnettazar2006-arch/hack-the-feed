@@ -150,6 +150,8 @@ def run(now: datetime | None = None) -> list[dict]:
             "videos_total": round(sum(map(_w, members))),
             "videos_recentes": round(sum(map(_w, recent))),
             "videos_echantillon": len(members),
+            # Sujet trouvé uniquement par le filet aveugle : aucun de nos thèmes ne l'avait prévu.
+            "imprevu": all(v["metrics"].get("theme_query") == "veille ouverte" for v in members),
             "vues_estimees": sum(1 for v in members if not v["metrics"].get("views")),
             "signaux": {
                 "acceleration": round(accel, 2),
