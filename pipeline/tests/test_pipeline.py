@@ -1,0 +1,118 @@
+"""Tests sans réseau ni dépense : python -m pytest pipeline/tests -q (depuis la racine du repo)."""
+import json
+from collections import defaultdict
+from datetime import date, datetime, timedelta, timezone
+
+import httpx
+import pytest
+
+from htf import config
+
+
+@pytest.fixture(autouse=True)
+def temp_db(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "test.sqlite")
+    monkeypatch.setattr(config, "OUT_DIR", tmp_path / "out")
+
+
+def fake_oriane(monkeypatch, handler):
+    from htf.sources import oriane
+    orig = oriane.Oriane.__init__
+
+    def patched(self, api_key=None):
+        orig(self, "cle-test")
+        self.http = httpx.Client(base_url=oriane.BASE_URL, transport=httpx.MockTransport(handler))
+
+    monkeypatch.setattr(oriane.Oriane, "__init__", patched)
+    return oriane
+
+
+def test_authentification_bearer_puis_repli(monkeypatch):
+    seen = []
+
+    def handler(req):
+        seen.append(req.headers.get("authorization"))
+        return httpx.Response(200, json={"data": {"results": []}, "metadata": {"pagination": {"totalCount": 3}}})
+
+    oriane = fake_oriane(monkeypatch, handler)
+    _, total = oriane.Oriane().search({}, limit=1)
+    assert total == 3 and seen == ["Bearer cle-test"]
+
+
+def test_retard_indexation_corrige_et_filet_aveugle(monkeypatch):
+    today = date.today()
+    comp = lambda day: {0: 0.05, 1: 0.15, 2: 0.4}.get((today - date.fromisoformat(day)).days, 1.0)
+    true = lambda day: 400 if (today - date.fromisoformat(day)).days > 5 else 400 * (6 - (today - date.fromisoformat(day)).days)
+
+    def vid(i, day):
+        return {"id": i, "platform": "tiktok", "profileHandle": "c", "publishedAt": f"{day}T10:00:00Z", "media": []}
+
+    def handler(req):
+        body = json.loads(req.content)
+        day = body["filters"]["publishedAt"]["after"]
+        names = [q.get("name") for q in body.get("queries", [])]
+        limit = int(req.url.params["limit"])
+        if names == ["fr"] and limit == 1:
+            return httpx.Response(200, json={"data": {"results": []}, "metadata": {"pagination": {"totalCount": int(1e5 * comp(day))}}})
+        if names == ["fr"]:
+            res = [vid(f"b_{day}_{i}", day) for i in range(3)] + [vid(f"t_{day}_0", day)]
+            return httpx.Response(200, json={"data": {"results": res}, "metadata": {"pagination": {"totalCount": 99999}}})
+        total = int(true(day) * comp(day))
+        res = [vid(f"t_{day}_{i}", day) for i in range(min(limit, total))]
+        return httpx.Response(200, json={"data": {"results": res}, "metadata": {"pagination": {"totalCount": total}}})
+
+    oriane = fake_oriane(monkeypatch, handler)
+    from htf import store
+    oriane.collect_social(days=17, per_day=10, themes=["logement", oriane.BLIND_NET])
+    volume = defaultdict(float)
+    for it in store.load_items("social"):
+        if it["metrics"]["theme_query"] == "logement":
+            volume[it["published_at"][:10]] += it["metrics"]["weight"]
+    assert all(round(v) == true(d) for d, v in volume.items())
+    # Une vidéo vue par le thème puis par le filet aveugle garde le poids du thème.
+    shared = [it for it in store.load_items("social") if it["id"].endswith("_0") and ":t_" in it["id"]]
+    assert shared and all(it["metrics"]["weight"] > 1 for it in shared)
+
+
+def test_vues_instagram_estimees():
+    from htf.analyze import _engagement_rates, _views
+    vids = [{"metrics": {"platform": "instagram", "views": 20000, "likes": 1500, "comments": 300, "shares": 200}}] * 6
+    missing = {"metrics": {"platform": "instagram", "views": None, "likes": 3000, "comments": 600, "shares": 400}}
+    assert round(_views(missing, _engagement_rates(vids + [missing]))) == 40000
+
+
+def test_publication_coordonnee():
+    from htf.analyze import coordination
+    t0 = datetime(2026, 11, 2, tzinfo=timezone.utc)
+    copy = "Paroles : regardez ce que le gouvernement cache sur la nouvelle taxe sur les livrets partagez avant suppression"
+
+    def v(i, acc, txt):
+        return {"id": f"x{i}", "source": "oriane", "account": acc, "published_at": (t0 + timedelta(hours=i)).isoformat(), "text": txt}
+
+    campaign = [v(i, f"compte{i}", copy) for i in range(7)]
+    normal = [v(10 + i, f"autre{i}", f"Paroles : avis personnel {i} sur l'épargne, mots différents à chaque fois {i * 7}") for i in range(10)]
+    assert coordination(campaign + normal)["comptes"] == 7
+    assert coordination(normal) is None
+
+
+def test_brief_perime_jamais_exporte(monkeypatch):
+    from htf import export
+    config.OUT_DIR.mkdir(parents=True)
+    topic = {"id": "t1", "titre": "Nouveau titre", "rang": 1, "etat": "à surveiller", "sujet_type": "x", "politique": True,
+             "themes": [], "videos_total": 1, "videos_recentes": 1, "score": 1, "tons": {}, "couverture": [],
+             "couvert": False, "couvert_par_brut": False, "serie": [], "video_declencheur": None, "videos": [],
+             "signaux": {"acceleration": 1, "createurs_recents": 1, "surperformance_mediane": 1, "engagement": 0}}
+    (config.OUT_DIR / "topics.json").write_text(json.dumps([topic]))
+    (config.OUT_DIR / "brief.json").write_text(json.dumps([{"sujet": "t1", "titre": "Ancien titre", "etat": "x",
+                                                            "pourquoi": "", "angle": "", "deja_traite_par": []}]))
+    sent = defaultdict(list)
+
+    class FakeHttp:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def delete(self, *a, **k): return httpx.Response(204, request=httpx.Request("DELETE", "http://x"))
+        def post(self, path, content): sent[path] += json.loads(content); return httpx.Response(201)
+
+    monkeypatch.setattr(export, "_client", lambda: FakeHttp())
+    export.run()
+    assert sent["/brief"] == []

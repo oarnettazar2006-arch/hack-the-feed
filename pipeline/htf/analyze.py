@@ -53,6 +53,37 @@ def _views(v: dict, rates: dict[str, float]) -> float:
     return inter / rate
 
 
+def _shingles(text: str, k: int = 5) -> set[str]:
+    words = "".join(c.lower() if c.isalnum() else " " for c in text).split()
+    return {" ".join(words[i:i + k]) for i in range(max(len(words) - k + 1, 0))}
+
+
+def coordination(members: list[dict]) -> dict | None:
+    """Vidéos au texte presque identique publiées par des comptes différents à moins de 48 h d'écart.
+
+    Ne prouve pas une manipulation (reprises, sons tendance), mais c'est un signal à vérifier avant de traiter.
+    Les fausses vidéos de test, faites de phrases répétées, sont exclues.
+    """
+    real = [v for v in members if v["source"] != "fake"]
+    sigs = [(v, _shingles(v["text"].split("\nLégende")[0][:600])) for v in real]
+    sigs = [(v, s) for v, s in sigs if len(s) >= 8]
+    flagged, accounts = set(), set()
+    for i, (a, sa) in enumerate(sigs):
+        for b, sb in sigs[i + 1:]:
+            if a["account"] == b["account"]:
+                continue
+            if abs((_day(a["published_at"]) - _day(b["published_at"])).total_seconds()) > 48 * 3600:
+                continue
+            if len(sa & sb) / len(sa | sb) >= 0.6:
+                flagged |= {a["id"], b["id"]}
+                accounts |= {a["account"], b["account"]}
+    if len(flagged) < 5 or len(accounts) < 3 or len(flagged) / max(len(real), 1) < 0.2:
+        return None
+    example = next(v for v in real if v["id"] in flagged)
+    return {"videos": len(flagged), "comptes": len(accounts), "part": round(len(flagged) / len(real), 2),
+            "exemple": example["text"][:200]}
+
+
 def _state(accel: float, recent: int, total: int, covered: bool) -> str:
     if accel >= 2.5 and recent >= config.MIN_VIDEOS:
         state = "en forte hausse"
@@ -152,6 +183,7 @@ def run(now: datetime | None = None) -> list[dict]:
             "videos_echantillon": len(members),
             # Sujet trouvé uniquement par le filet aveugle : aucun de nos thèmes ne l'avait prévu.
             "imprevu": all(v["metrics"].get("theme_query") == "veille ouverte" for v in members),
+            "coordination": coordination(members),
             "vues_estimees": sum(1 for v in members if not v["metrics"].get("views")),
             "signaux": {
                 "acceleration": round(accel, 2),

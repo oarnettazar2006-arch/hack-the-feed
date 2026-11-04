@@ -1,5 +1,6 @@
 """Couverture médias : flux RSS de presse et flux RSS des chaînes YouTube (gratuits, sans clé)."""
 import hashlib
+import html
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -72,6 +73,47 @@ def _items_from_feed(name: str, group: str, source: str, url: str, since: dateti
     return items
 
 
+BRUT_SITEMAPS = {
+    # Titres et dates des contenus des ~48 dernières heures (vidéos comprises).
+    "news": "https://www.brut.media/sitemaps/fr/news-sitemap.xml",
+    # Dates sans titre : le titre est reconstitué à partir de l'adresse.
+    "articles": ["https://www.brut.media/sitemaps/fr/articles-01.xml", "https://www.brut.media/sitemaps/fr/articles-02.xml"],
+}
+
+
+def _slug_title(url: str) -> str:
+    slug = url.rstrip("/").rsplit("/", 1)[-1]
+    return slug.replace("-", " ").capitalize()
+
+
+def collect_brut(days: int = 14) -> list[dict]:
+    """Contenus publiés par Brut (site), d'après ses sitemaps publics. Brut n'a pas de flux RSS."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    found: dict[str, dict] = {}
+
+    def add(url: str, title: str, when: datetime) -> None:
+        if when >= since and url not in found:
+            found[url] = {
+                "id": "media:" + hashlib.sha1(url.encode()).hexdigest()[:16], "kind": "media", "source": "brut",
+                "account": "Brut", "account_group": "brut", "published_at": when.isoformat(), "url": url,
+                "text": title, "metrics": {},
+            }
+
+    news = httpx.get(BRUT_SITEMAPS["news"], headers=UA, timeout=30, follow_redirects=True).text
+    for block in re.findall(r"<url>(.*?)</url>", news, re.S):
+        loc = re.search(r"<loc>([^<]+)</loc>", block)
+        title = re.search(r"<news:title>([^<]+)</news:title>", block)
+        date = re.search(r"<news:publication_date>([^<]+)</news:publication_date>", block)
+        if loc and date:
+            add(loc.group(1), html.unescape(title.group(1)) if title else _slug_title(loc.group(1)),
+                datetime.fromisoformat(date.group(1).replace("Z", "+00:00")))
+    for sitemap in BRUT_SITEMAPS["articles"]:
+        xml = httpx.get(sitemap, headers=UA, timeout=60, follow_redirects=True).text
+        for loc, mod in re.findall(r"<loc>([^<]+)</loc>\s*<lastmod>([^<]+)</lastmod>", xml):
+            add(loc, _slug_title(loc), datetime.fromisoformat(mod.replace("Z", "+00:00")))
+    return list(found.values())
+
+
 def collect(days: int = 14) -> dict:
     since = datetime.now(timezone.utc) - timedelta(days=days)
     report, items = {}, []
@@ -89,5 +131,11 @@ def collect(days: int = 14) -> dict:
             report[f"YouTube {name}"] = len(got)
         except Exception as e:
             report[f"YouTube {name}"] = f"erreur : {e.__class__.__name__}"
+    try:
+        got = collect_brut(days)
+        items += got
+        report["Site Brut (sitemaps)"] = len(got)
+    except Exception as e:
+        report["Site Brut (sitemaps)"] = f"erreur : {e.__class__.__name__}"
     report["nouveaux"] = store.upsert_items(items)
     return report

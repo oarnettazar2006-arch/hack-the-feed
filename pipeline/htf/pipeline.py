@@ -5,7 +5,7 @@ import time
 
 import httpx
 
-from . import analyze, annotate, config, export, llm, showcase, store
+from . import analyze, annotate, config, export, llm, showcase, snowball, store
 from .sources import media, oriane
 
 
@@ -84,6 +84,15 @@ def run(run_id: str, days: int, per_day: int, top: int, collect: bool, ask) -> d
                 "personnalités hors liste": [p["nom"] for p in persons if p["hors_liste"]][:5]}
 
     step("regroupement et score", do_analyze)
+
+    if collect:
+        def do_snowball():
+            topics = json.loads((config.OUT_DIR / "topics.json").read_text())
+            result = snowball.measure(run_id, topics)
+            (config.OUT_DIR / "topics.json").write_text(json.dumps(topics, ensure_ascii=False, indent=2))
+            return result
+
+        step("relance ciblée des sujets imprévus", do_snowball)
 
     def do_showcase():
         topics = json.loads((config.OUT_DIR / "topics.json").read_text())

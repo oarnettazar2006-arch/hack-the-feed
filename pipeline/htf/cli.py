@@ -3,7 +3,7 @@ import argparse
 import json
 from datetime import datetime
 
-from . import analyze, annotate, config, export, pipeline, showcase, store
+from . import analyze, annotate, config, export, pipeline, showcase, snowball, store
 from .sources import fake_social, media, oriane
 
 
@@ -34,6 +34,8 @@ def main() -> None:
     sub.add_parser("analyze", help="regrouper, scorer, comparer aux médias (gratuit)")
     sc = sub.add_parser("showcase", help="fiches Opus pour les premiers sujets + brief (payant)")
     sc.add_argument("--top", type=int, default=config.TOP_TOPICS_SHOWCASE)
+    sb = sub.add_parser("snowball", help="mesurer le vrai volume des sujets imprévus (Oriane + Haiku)")
+    sb.add_argument("--max", type=int, default=3)
     sub.add_parser("export", help="envoyer les résultats dans Supabase (gratuit)")
     ck = sub.add_parser("check", help="tout vérifier avant de commencer (gratuit)")
     ck.add_argument("--oriane", action="store_true", help="tester aussi Oriane (1 appel)")
@@ -85,6 +87,10 @@ def main() -> None:
         (config.OUT_DIR / "topics.json").write_text(json.dumps(cards, ensure_ascii=False, indent=2))
         (config.OUT_DIR / "brief.json").write_text(json.dumps(brief, ensure_ascii=False, indent=2))
         show({"fiches": args.top, "brief": brief, "dépense ($)": round(store.spent(run_id), 4)})
+    elif args.cmd == "snowball":
+        topics = json.loads((config.OUT_DIR / "topics.json").read_text())
+        show(snowball.measure(run_id, topics, args.max))
+        (config.OUT_DIR / "topics.json").write_text(json.dumps(topics, ensure_ascii=False, indent=2))
     elif args.cmd == "export":
         show(export.run())
     elif args.cmd == "check":

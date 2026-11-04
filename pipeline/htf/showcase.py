@@ -44,6 +44,9 @@ def _prompt(topic: dict, local: dict[str, str]) -> str:
         f"Créateurs différents sur la période récente : {s['createurs_recents']}",
         f"Surperformance médiane (vues / abonnés) : {s['surperformance_mediane']}",
         f"Tons : {json.dumps(topic['tons'], ensure_ascii=False)}",
+        (f"Signal : {topic['coordination']['videos']} vidéos de {topic['coordination']['comptes']} comptes différents "
+         f"reprennent un texte presque identique en moins de 48 h ({int(topic['coordination']['part'] * 100)} % du sujet)."
+         if topic.get("coordination") else "Pas de signal de publication coordonnée."),
         "Couverture médias : " + ("; ".join(f"{c['media']} ({c['date'][:10]}) : {c['titre']}" for c in topic["couverture"])
                                   or "aucun média de notre base n'a traité ce sujet"),
         "",
