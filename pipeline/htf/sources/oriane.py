@@ -56,9 +56,10 @@ MEDIA_HANDLES = {
     "Libération": ("gauche", ["liberationfr", "libe"]),
 }
 
+# Bearer confirmé le 4/11 (x-api-key refusé). Les autres restent en secours.
 AUTH_STYLES = [
-    lambda k: {"x-api-key": k},
     lambda k: {"Authorization": f"Bearer {k}"},
+    lambda k: {"x-api-key": k},
     lambda k: {"api-key": k},
 ]
 
@@ -221,7 +222,7 @@ def ping() -> dict:
     since = (date.today() - timedelta(days=2)).isoformat()
     results, total = api.search({"publishedAt": {"after": since}}, [FRENCH, theme_query("test", ["loyer"])], limit=2)
     first = results[0] if results else {}
-    return {"authentification": ["x-api-key", "Bearer", "api-key"][AUTH_STYLES.index(api.auth)],
+    return {"authentification": ["Bearer", "x-api-key", "api-key"][AUTH_STYLES.index(api.auth)],
             "résultats sur 2 jours pour « loyer »": total,
             "champs reçus": sorted(first.keys()),
             "champs média": sorted((first.get("media") or [{}])[0].keys()) if first else [],
