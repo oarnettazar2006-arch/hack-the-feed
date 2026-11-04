@@ -67,6 +67,8 @@ def run(run_id: str, days: int, per_day: int, top: int, collect: bool, ask) -> d
         print(json.dumps(oriane.plan(days, per_day), ensure_ascii=False, indent=1))
         if not ask("Lancer la collecte Oriane (crédits) ?"):
             return {"arrêt": "collecte annulée"}
+        # Les fausses vidéos de test ne doivent jamais se mélanger aux vraies.
+        steps["fausses vidéos supprimées"] = store.purge_fake()
         step("collecte Oriane (thèmes + filet aveugle)", lambda: oriane.collect_social(days, per_day))
         step("collecte Oriane (comptes médias)", oriane.collect_media)
     step("collecte presse et YouTube", media.collect)
@@ -83,6 +85,8 @@ def run(run_id: str, days: int, per_day: int, top: int, collect: bool, ask) -> d
         return {"sujets": len(topics), "imprévus": sum(t["imprevu"] for t in topics),
                 "personnalités hors liste": [p["nom"] for p in persons if p["hors_liste"]][:5]}
 
+    if any(i["source"] == "fake" for i in store.load_items("social")):
+        print("⚠ ATTENTION : des fausses vidéos de test sont dans la base (commande purge-fake pour les retirer).")
     step("regroupement et score", do_analyze)
 
     if collect:

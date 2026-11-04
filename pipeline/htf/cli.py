@@ -3,7 +3,7 @@ import argparse
 import json
 from datetime import datetime
 
-from . import analyze, annotate, config, export, pipeline, showcase, snowball, store
+from . import analyze, annotate, backtest, config, export, pipeline, showcase, snowball, store
 from .sources import fake_social, media, oriane
 
 
@@ -46,6 +46,11 @@ def main() -> None:
     rn.add_argument("--top", type=int, default=config.TOP_TOPICS_SHOWCASE)
     rn.add_argument("--no-collect", action="store_true", help="repartir des vidéos déjà collectées")
     rn.add_argument("--yes", action="store_true", help="ne pas demander de confirmation")
+    sub.add_parser("backtest-candidates", help="histoires de presse testables pour la preuve sur le passé (gratuit)")
+    bt = sub.add_parser("backtest", help="mesurer l'avance des réseaux sur la presse (Oriane, ~15 appels)")
+    bt.add_argument("story", help="l'histoire, en une phrase")
+    bt.add_argument("press_day", help="date du premier article, AAAA-MM-JJ")
+    sub.add_parser("purge-fake", help="supprimer les fausses vidéos de test")
     sub.add_parser("cost", help="dépenses enregistrées")
     args = p.parse_args()
 
@@ -101,6 +106,12 @@ def main() -> None:
     elif args.cmd == "run":
         ask = (lambda q: True) if args.yes else (lambda q: input(q + " (oui/non) ").strip().lower() in ("o", "oui", "y", "yes"))
         show(pipeline.run(run_id, args.days, args.per_day, args.top, not args.no_collect, ask))
+    elif args.cmd == "backtest-candidates":
+        show(backtest.candidates())
+    elif args.cmd == "backtest":
+        show(backtest.measure(run_id, args.story, args.press_day))
+    elif args.cmd == "purge-fake":
+        show({"fausses vidéos supprimées": store.purge_fake()})
     elif args.cmd == "cost":
         show({"total ($)": round(store.spent(), 4), "détail": store.cost_report()})
 

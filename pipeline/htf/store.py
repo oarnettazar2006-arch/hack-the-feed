@@ -70,6 +70,12 @@ def upsert_items(items: list[dict]) -> int:
         return conn.execute("SELECT COUNT(*) FROM items").fetchone()[0] - before
 
 
+def purge_fake() -> int:
+    """Supprime les fausses vidéos de test (avant toute analyse sur de vraies données)."""
+    with connect() as conn:
+        return conn.execute("DELETE FROM items WHERE source = 'fake'").rowcount
+
+
 def existing_ids(ids: list[str]) -> set[str]:
     with connect() as conn:
         marks = ",".join("?" * len(ids)) or "''"
