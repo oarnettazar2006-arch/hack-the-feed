@@ -62,6 +62,8 @@ def main() -> None:
     elif args.cmd == "analyze":
         topics = analyze.run()
         config.OUT_DIR.mkdir(parents=True, exist_ok=True)
+        # Les fiches et le brief dépendent des regroupements : une nouvelle analyse les rend caducs.
+        (config.OUT_DIR / "brief.json").unlink(missing_ok=True)
         (config.OUT_DIR / "topics.json").write_text(json.dumps(topics, ensure_ascii=False, indent=2))
         persons = analyze.people()
         (config.OUT_DIR / "people.json").write_text(json.dumps(persons, ensure_ascii=False, indent=2))

@@ -29,7 +29,12 @@ def _insert(http: httpx.Client, table: str, rows: list[dict]) -> None:
 
 def run() -> dict:
     topics = json.loads((config.OUT_DIR / "topics.json").read_text())
-    brief = json.loads((config.OUT_DIR / "brief.json").read_text())
+    brief_path = config.OUT_DIR / "brief.json"
+    brief = json.loads(brief_path.read_text()) if brief_path.exists() else []
+    # Garde-fou : un brief ne part que s'il désigne les mêmes sujets, avec les mêmes titres, que l'analyse.
+    titles = {t["id"]: t.get("titre") for t in topics}
+    if any(titles.get(b["sujet"]) != b["titre"] for b in brief):
+        brief = []
     people_path = config.OUT_DIR / "people.json"
     persons = json.loads(people_path.read_text()) if people_path.exists() else []
     notes = store.get_annotations(annotate.VERSION)
@@ -82,4 +87,5 @@ def run() -> dict:
             "nom", "hors_liste", "videos_total", "videos_recentes", "acceleration", "createurs_recents", "score",
             "tons", "affirmations")}} for n, p in enumerate(persons)])
     return {"sujets": len(topic_rows), "positions": len(positions), "couverture": len(coverage),
-            "vidéos": len(videos), "brief": len(brief), "personnalités": len(persons)}
+            "vidéos": len(videos), "brief": len(brief) or "aucun (lancer showcase après analyze)",
+            "fiches Opus": sum(1 for t in topics if t.get("titre")), "personnalités": len(persons)}
