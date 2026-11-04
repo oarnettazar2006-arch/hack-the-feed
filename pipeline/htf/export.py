@@ -21,7 +21,10 @@ def _client() -> httpx.Client:
 
 def _insert(http: httpx.Client, table: str, rows: list[dict]) -> None:
     for i in range(0, len(rows), 500):
-        http.post(f"/{table}", content=json.dumps(rows[i:i + 500], ensure_ascii=False, default=str)).raise_for_status()
+        r = http.post(f"/{table}", content=json.dumps(rows[i:i + 500], ensure_ascii=False, default=str))
+        if r.status_code >= 400:
+            hint = " (lancer supabase/reload_schema.sql si une colonne vient d'être ajoutée)" if "column" in r.text else ""
+            raise RuntimeError(f"Supabase {r.status_code} sur {table} : {r.text[:300]}{hint}")
 
 
 def run() -> dict:

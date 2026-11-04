@@ -19,3 +19,4 @@ create policy "lecture" on personnalites for select using (true);
 grant select on personnalites to anon, authenticated;
 grant all on personnalites to service_role;
 grant usage, select on all sequences in schema public to service_role;
+notify pgrst, 'reload schema';
