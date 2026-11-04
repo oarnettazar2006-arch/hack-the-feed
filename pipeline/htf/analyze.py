@@ -27,6 +27,31 @@ def _w(v: dict) -> float:
     return v["metrics"].get("weight", 1) or 0
 
 
+def _engagement_rates(videos: list[dict]) -> dict[str, float]:
+    """Taux d'interactions par vue, médian par plateforme, mesuré sur les vidéos qui ont leurs vues."""
+    by_platform: dict[str, list[float]] = {}
+    for v in videos:
+        m = v["metrics"]
+        views = m.get("views")
+        if views:
+            inter = m.get("likes", 0) + m.get("comments", 0) + m.get("shares", 0)
+            by_platform.setdefault(m.get("platform") or "?", []).append(inter / views)
+    rates = {p: float(np.median(r)) for p, r in by_platform.items() if len(r) >= 5}
+    everything = [x for r in by_platform.values() for x in r]
+    rates["*"] = float(np.median(everything)) if everything else 0.05
+    return rates
+
+
+def _views(v: dict, rates: dict[str, float]) -> float:
+    """Vues réelles, ou estimées par les interactions quand la plateforme ne les publie pas."""
+    m = v["metrics"]
+    if m.get("views"):
+        return m["views"]
+    inter = m.get("likes", 0) + m.get("comments", 0) + m.get("shares", 0)
+    rate = rates.get(m.get("platform") or "?", rates["*"]) or rates["*"] or 0.05
+    return inter / rate
+
+
 def _state(accel: float, recent: int, total: int, covered: bool) -> str:
     if accel >= 2.5 and recent >= config.MIN_VIDEOS:
         state = "en forte hausse"
@@ -62,6 +87,8 @@ def run(now: datetime | None = None) -> list[dict]:
     recent_start = now - timedelta(days=config.WINDOW_RECENT)
     base_start = recent_start - timedelta(days=config.WINDOW_BASELINE)
 
+    rates = _engagement_rates(videos)
+
     # On ne regroupe que les vidéos d'intérêt public ; le reste est compté à part.
     kept = [v for v in videos if notes[v["id"]]["interet_public"]]
     vectors = embed([notes[v["id"]]["sujet"] for v in kept])
@@ -80,9 +107,9 @@ def run(now: datetime | None = None) -> list[dict]:
         base_per_day = sum(map(_w, base)) / config.WINDOW_BASELINE
         accel = (recent_per_day + 1) / (base_per_day + 1)
         creators_recent = len({v["account"] for v in recent})
-        ratios = [v["metrics"].get("views", 0) / max(v["metrics"].get("followers", 0), 1) for v in recent] or [0]
+        ratios = [_views(v, rates) / max(v["metrics"].get("followers", 0), 1) for v in recent] or [0]
         overperf = float(np.median(ratios))
-        views = sum(v["metrics"].get("views", 0) for v in recent)
+        views = sum(_views(v, rates) for v in recent)
         engagement = sum(3 * v["metrics"].get("shares", 0) + 2 * v["metrics"].get("comments", 0)
                          + v["metrics"].get("likes", 0) for v in recent) / max(views, 1)
 
@@ -111,8 +138,8 @@ def run(now: datetime | None = None) -> list[dict]:
         # Vidéo qui a lancé le sujet : la plus ancienne parmi celles qui ont surperformé.
         launchers = sorted(members, key=lambda v: (_day(v["published_at"]),))
         launcher = next((v for v in launchers
-                         if v["metrics"].get("views", 0) / max(v["metrics"].get("followers", 1), 1) >= 2), launchers[0])
-        top_videos = sorted(members, key=lambda v: -v["metrics"].get("views", 0))[:12]
+                         if _views(v, rates) / max(v["metrics"].get("followers", 1), 1) >= 2), launchers[0])
+        top_videos = sorted(members, key=lambda v: -_views(v, rates))[:12]
 
         topics.append({
             "id": f"t{label}",
@@ -122,6 +149,7 @@ def run(now: datetime | None = None) -> list[dict]:
             "videos_total": round(sum(map(_w, members))),
             "videos_recentes": round(sum(map(_w, recent))),
             "videos_echantillon": len(members),
+            "vues_estimees": sum(1 for v in members if not v["metrics"].get("views")),
             "signaux": {
                 "acceleration": round(accel, 2),
                 "createurs_recents": creators_recent,

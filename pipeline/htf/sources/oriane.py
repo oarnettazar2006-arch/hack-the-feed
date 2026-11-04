@@ -153,7 +153,8 @@ def to_item(r: dict, theme: str | None, weight: float, kind: str = "social", gro
         "url": url,
         "text": text,
         "metrics": {
-            "views": r.get("viewsCount") or 0, "likes": r.get("likesCount") or 0,
+            # Instagram ne publie pas toujours les vues : None, estimé ensuite dans analyze.
+            "views": r.get("viewsCount"), "likes": r.get("likesCount") or 0,
             "shares": r.get("sharesCount") or 0, "comments": r.get("commentsCount") or 0,
             "followers": r.get("profileFollowersCount") or 0, "platform": platform, "handle": handle,
             "theme_query": theme, "weight": weight, "thumbnail": r.get("thumbnailMediaUrl"),

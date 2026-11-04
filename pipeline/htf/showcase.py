@@ -68,7 +68,7 @@ def build_cards(run_id: str, topics: list[dict], top: int) -> list[dict]:
             positions.append({
                 "libelle": p.libelle, "resume": p.resume, "videos": vids,
                 "nb_videos": len(vids),
-                "vues": sum(m.get("views", 0) for m in metrics),
+                "vues": sum(m.get("views") or 0 for m in metrics),
                 "partages": sum(m.get("shares", 0) for m in metrics),
             })
         cards.append({**topic, "titre": card.titre, "pourquoi_ca_monte": card.pourquoi_ca_monte,
