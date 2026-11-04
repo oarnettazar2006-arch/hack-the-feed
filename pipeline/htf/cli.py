@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 from . import analyze, annotate, config, export, showcase, store
-from .sources import fake_social, media
+from .sources import fake_social, media, oriane
 
 
 def show(obj) -> None:
@@ -20,6 +20,17 @@ def main() -> None:
     for name in ("annotate-social", "annotate-media"):
         a = sub.add_parser(name, help="annoter avec Haiku (payant)")
         a.add_argument("--limit", type=int, default=None)
+    sub.add_parser("oriane-ping", help="1 appel Oriane : vérifie clé et format (crédits)")
+    op = sub.add_parser("oriane-plan", help="nombre d'appels d'une collecte (gratuit)")
+    oc = sub.add_parser("oriane-collect", help="collecte sociale Oriane (crédits)")
+    for x in (op, oc):
+        x.add_argument("--days", type=int, default=17)
+        x.add_argument("--per-day", type=int, default=30)
+        x.add_argument("--themes", nargs="*", default=None)
+    oc.add_argument("--yes", action="store_true", help="lancer sans confirmation")
+    sub.add_parser("oriane-media", help="vidéos des comptes médias via Oriane (crédits)")
+    ic = sub.add_parser("oriane-csv", help="importer un export CSV de l'app Oriane (gratuit)")
+    ic.add_argument("path")
     sub.add_parser("analyze", help="regrouper, scorer, comparer aux médias (gratuit)")
     sc = sub.add_parser("showcase", help="fiches Opus pour les premiers sujets + brief (payant)")
     sc.add_argument("--top", type=int, default=config.TOP_TOPICS_SHOWCASE)
@@ -36,6 +47,18 @@ def main() -> None:
         show(annotate.annotate_social(run_id, args.limit))
     elif args.cmd == "annotate-media":
         show(annotate.annotate_media(run_id, args.limit))
+    elif args.cmd == "oriane-ping":
+        show(oriane.ping())
+    elif args.cmd == "oriane-plan":
+        show(oriane.plan(args.days, args.per_day, args.themes))
+    elif args.cmd == "oriane-collect":
+        show(oriane.plan(args.days, args.per_day, args.themes, media=False))
+        if args.yes or input("Lancer cette collecte ? (oui/non) ").strip().lower() in ("o", "oui", "y", "yes"):
+            show(oriane.collect_social(args.days, args.per_day, args.themes))
+    elif args.cmd == "oriane-media":
+        show(oriane.collect_media())
+    elif args.cmd == "oriane-csv":
+        show(oriane.import_csv(args.path))
     elif args.cmd == "analyze":
         topics = analyze.run()
         config.OUT_DIR.mkdir(parents=True, exist_ok=True)

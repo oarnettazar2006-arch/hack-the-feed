@@ -22,6 +22,11 @@ def _cluster(vectors: np.ndarray) -> np.ndarray:
     return model.fit_predict(vectors)
 
 
+def _w(v: dict) -> float:
+    """Nombre de vidéos réelles qu'une vidéo de l'échantillon représente (1 pour les données sans poids)."""
+    return v["metrics"].get("weight", 1) or 0
+
+
 def _state(accel: float, recent: int, total: int, covered: bool) -> str:
     if accel >= 2.5 and recent >= config.MIN_VIDEOS:
         state = "en forte hausse"
@@ -64,8 +69,8 @@ def run(now: datetime | None = None) -> list[dict]:
             continue
         recent = [v for v in members if _day(v["published_at"]) >= recent_start]
         base = [v for v in members if base_start <= _day(v["published_at"]) < recent_start]
-        recent_per_day = len(recent) / config.WINDOW_RECENT
-        base_per_day = len(base) / config.WINDOW_BASELINE
+        recent_per_day = sum(map(_w, recent)) / config.WINDOW_RECENT
+        base_per_day = sum(map(_w, base)) / config.WINDOW_BASELINE
         accel = (recent_per_day + 1) / (base_per_day + 1)
         creators_recent = len({v["account"] for v in recent})
         ratios = [v["metrics"].get("views", 0) / max(v["metrics"].get("followers", 0), 1) for v in recent] or [0]
@@ -85,10 +90,12 @@ def run(now: datetime | None = None) -> list[dict]:
         ]
         covered = bool(coverage)
 
-        days = Counter(_day(v["published_at"]).date().isoformat() for v in members)
+        days = Counter()
+        for v in members:
+            days[_day(v["published_at"]).date().isoformat()] += _w(v)
         first_day = (now - timedelta(days=config.WINDOW_RECENT + config.WINDOW_BASELINE)).date()
         series = [{"jour": (first_day + timedelta(days=d)).isoformat(),
-                   "videos": days.get((first_day + timedelta(days=d)).isoformat(), 0)}
+                   "videos": round(days.get((first_day + timedelta(days=d)).isoformat(), 0))}
                   for d in range(config.WINDOW_RECENT + config.WINDOW_BASELINE + 1)]
 
         member_notes = [notes[v["id"]] for v in members]
@@ -105,8 +112,9 @@ def run(now: datetime | None = None) -> list[dict]:
             "sujet_type": Counter(n["sujet"] for n in member_notes).most_common(1)[0][0],
             "politique": sum(n["politique"] for n in member_notes) > len(member_notes) / 2,
             "themes": [t for t, _ in themes.most_common(3)],
-            "videos_total": len(members),
-            "videos_recentes": len(recent),
+            "videos_total": round(sum(map(_w, members))),
+            "videos_recentes": round(sum(map(_w, recent))),
+            "videos_echantillon": len(members),
             "signaux": {
                 "acceleration": round(accel, 2),
                 "createurs_recents": creators_recent,

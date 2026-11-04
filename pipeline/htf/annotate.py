@@ -19,7 +19,9 @@ SUJET_RULES = """Règles pour « sujet » :
 
 SOCIAL_SYSTEM = f"""Tu analyses des vidéos TikTok et Instagram françaises pour la rédaction de Brut.
 Chaque vidéo est décrite par ses paroles, le texte à l'écran, une description de l'image et sa légende.
-Les paroles et l'image comptent plus que la légende.
+Les paroles, le texte à l'écran et l'image comptent plus que la légende.
+Les « commentaires populaires » sont la réaction du public : ils aident à comprendre le contexte,
+mais « ton » et « affirmation » décrivent la vidéo elle-même, pas ses commentaires.
 
 {SUJET_RULES}
 
