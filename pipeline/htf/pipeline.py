@@ -34,7 +34,10 @@ def check(with_oriane: bool = False) -> dict:
         with export._client() as http:
             missing = [t for t in ("topics", "topic_positions", "topic_coverage", "videos", "brief", "personnalites")
                        if http.get(f"/{t}", params={"select": "*", "limit": 1}).status_code != 200]
-        report["Supabase"] = "ok" if not missing else f"tables inaccessibles : {missing}"
+            # Colonnes ajoutées le 5/11 : présentes seulement si migration_preuve.sql a été exécutée.
+            new_cols = http.get("/topics", params={"select": "citations,format_brut", "limit": 1}).status_code == 200
+        report["Supabase"] = ("ok" if not missing and new_cols else f"tables inaccessibles : {missing}" if missing
+                              else "exécuter supabase/migration_preuve.sql dans l'éditeur SQL de Supabase")
     except Exception as e:
         report["Supabase"] = f"ERREUR {str(e)[:100]}"
 

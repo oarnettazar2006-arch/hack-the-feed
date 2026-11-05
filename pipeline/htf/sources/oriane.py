@@ -205,6 +205,12 @@ def to_item(r: dict, theme: str | None, weight: float, kind: str = "social", gro
     transcript = " ".join(m.get("transcript") or "" for m in medias).strip()
     on_screen = " / ".join(t for m in medias for t in (m.get("onScreenText") or []))
     comments = [c.get("content", "") for c in (r.get("popularComments") or [])][:5]
+    # Repères dans la vidéo : chaque citation retrouvée pointe vers sa seconde ou l'image où le texte apparaît.
+    first = medias[0] if medias else {}
+    chunks = [[round(c["startSeconds"], 1), c["text"]] for c in (first.get("transcriptChunks") or [])[:120]]
+    frames = [[round(f.get("timestampSeconds") or 0, 1), f.get("url"),
+               " ".join(t.get("text", "") for t in f["onScreenTextRegions"])]
+              for f in (first.get("frames") or []) if f.get("onScreenTextRegions")][:12]
     parts = [f"Paroles : {transcript}" if transcript else "",
              f"Texte à l'écran : {on_screen}" if on_screen else "",
              f"Titre : {r['title']}" if r.get("title") else "",
@@ -232,7 +238,8 @@ def to_item(r: dict, theme: str | None, weight: float, kind: str = "social", gro
             "shares": r.get("sharesCount") or 0, "comments": r.get("commentsCount") or 0,
             "followers": r.get("profileFollowersCount") or 0, "platform": platform, "handle": handle,
             "theme_query": theme, "weight": weight, "thumbnail": r.get("thumbnailMediaUrl"),
-            "comments_text": comments,
+            "comments_text": comments, "hashtags": r.get("hashtags") or [],
+            "chunks": chunks, "frames": frames,
         },
     }
 

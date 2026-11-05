@@ -18,7 +18,7 @@ from .sources import oriane
 
 
 def candidates(min_outlets: int = 4, min_age_days: int = 6, top: int = 15) -> list[dict]:
-    notes = store.get_annotations(annotate.VERSION)
+    notes = annotate.notes()
     press = [m for m in store.load_items("media") if m["id"] in notes and m["source"] in ("archive", "rss", "brut")]
     cutoff = (datetime.now(timezone.utc) - timedelta(days=min_age_days)).date().isoformat()
     vectors = embed([notes[m["id"]]["sujet"] for m in press])

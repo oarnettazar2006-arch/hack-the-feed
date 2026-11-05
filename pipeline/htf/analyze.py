@@ -84,6 +84,82 @@ def coordination(members: list[dict]) -> dict | None:
             "exemple": example["text"][:200]}
 
 
+def _words(text: str) -> list[str]:
+    plain = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
+    return "".join(c if c.isalnum() else " " for c in plain).split()
+
+
+def locate(citation: str, metrics: dict) -> dict:
+    """Retrouve une citation dans la vidéo : seconde du passage dit, ou image où le texte est écrit.
+
+    Rien n'est renvoyé si moins de 60 % des mots de la citation sont dans le passage (citation non vérifiée).
+    """
+    target = set(_words(citation))
+    if len(target) < 3:
+        return {}
+    best, where = 0.0, {}
+    for i, (start, text) in enumerate(metrics.get("chunks") or []):
+        # Une citation peut chevaucher deux passages consécutifs.
+        nxt = (metrics["chunks"][i + 1][1] if i + 1 < len(metrics["chunks"]) else "")
+        score = len(target & set(_words(text + " " + nxt))) / len(target)
+        if score > best:
+            best, where = score, {"seconde": start}
+    for ts, url, text in metrics.get("frames") or []:
+        score = len(target & set(_words(text))) / len(target)
+        if score > best:
+            best, where = score, {"seconde": ts, "image": url}
+    return where if best >= 0.6 else {}
+
+
+def evidence(members: list[dict], notes: dict, rates: dict) -> dict | None:
+    """Ce que seule la lecture de la vidéo permettait de voir : part des vidéos dont la légende ne dit rien du sujet."""
+    read = [v for v in members if "legende_suffit" in notes[v["id"]]]
+    if not read:
+        return None
+    hidden = [v for v in read if not notes[v["id"]]["legende_suffit"]]
+    quotes, accounts = [], set()
+    for v in sorted(read, key=lambda v: -_views(v, rates)):
+        n = notes[v["id"]]
+        if not n.get("citation") or v["account"] in accounts or n["canal"] == "légende":
+            continue
+        accounts.add(v["account"])
+        quotes.append({"video": v["id"], "compte": v["account"], "canal": n["canal"], "citation": n["citation"],
+                       "url": v["url"], **locate(n["citation"], v["metrics"])})
+        if len(quotes) == 6:
+            break
+    return {
+        "videos_lues": len(read),
+        "part_hors_legende": round(len(hidden) / len(read), 2),
+        "canaux": dict(Counter(notes[v["id"]]["canal"] for v in read)),
+        "reactions": dict(Counter(notes[v["id"]]["reaction_public"] for v in read
+                                  if notes[v["id"]]["reaction_public"] != "sans commentaires")),
+        "citations": quotes,
+    }
+
+
+def pivot(members: list[dict], rates: dict) -> tuple[dict, dict]:
+    """La vidéo qui a fait basculer le sujet.
+
+    Parmi les vidéos qui ont dépassé l'audience habituelle de leur créateur (vues ≥ 2 × abonnés),
+    celle après laquelle le sujet a le plus accéléré : vidéos des 48 h suivantes comparées aux 48 h précédentes.
+    À défaut, la plus ancienne vidéo du sujet.
+    """
+    window = timedelta(hours=48)
+    dated = [(_day(v["published_at"]), _w(v), v) for v in members]
+    best, best_key, effect = None, None, {}
+    for t, _, v in dated:
+        if _views(v, rates) < 2 * max(v["metrics"].get("followers", 0), 1):
+            continue
+        before = sum(w for d, w, o in dated if t - window <= d < t)
+        after = sum(w for d, w, o in dated if t <= d < t + window and o is not v)
+        key = ((after + 1) / (before + 1), _views(v, rates))
+        if best_key is None or key > best_key:
+            best, best_key, effect = v, key, {"avant_48h": round(before), "apres_48h": round(after)}
+    if best is None:
+        best = min(members, key=lambda v: _day(v["published_at"]))
+    return best, effect
+
+
 # Familles par type de source (et non par orientation) : la presse écrite a 14 jours d'archives,
 # les vidéos sur les réseaux (YouTube, puis TikTok/Instagram via Oriane) ont leur propre historique.
 PRESS_SOURCES = {"rss", "archive", "brut"}
@@ -128,7 +204,7 @@ def _state(accel: float, recent: int, total: int, covered: bool, coverage_comple
 
 
 def run(now: datetime | None = None) -> list[dict]:
-    notes = store.get_annotations(annotate.VERSION)
+    notes = annotate.notes()
     videos = [v for v in store.load_items("social") if v["id"] in notes]
     medias = [m for m in store.load_items("media") if m["id"] in notes]
     if not videos:
@@ -195,10 +271,7 @@ def run(now: datetime | None = None) -> list[dict]:
         member_notes = [notes[v["id"]] for v in members]
         themes = Counter(t for n in member_notes for t in n["themes"])
         tones = Counter(n["ton"] for n in member_notes)
-        # Vidéo qui a lancé le sujet : la plus ancienne parmi celles qui ont surperformé.
-        launchers = sorted(members, key=lambda v: (_day(v["published_at"]),))
-        launcher = next((v for v in launchers
-                         if _views(v, rates) / max(v["metrics"].get("followers", 1), 1) >= 2), launchers[0])
+        launcher, launch_effect = pivot(members, rates)
         top_videos = sorted(members, key=lambda v: -_views(v, rates))[:12]
 
         topics.append({
@@ -230,6 +303,8 @@ def run(now: datetime | None = None) -> list[dict]:
             "etat": _state(accel, len(recent), len(members), covered, coverage_complete),
             "serie": series,
             "video_declencheur": launcher["id"],
+            "declencheur_effet": launch_effect,
+            "preuve": evidence(members, notes, rates),
             "videos_phares": [v["id"] for v in top_videos],
             "videos": [v["id"] for v in members],
             "affirmations": [{"video": v["id"], "ton": notes[v["id"]]["ton"], "affirmation": notes[v["id"]]["affirmation"]}
@@ -252,11 +327,12 @@ def people(now: datetime | None = None) -> list[dict]:
     """Personnalités citées dans les vidéos, classées par émergence. Signale celles absentes de nos listes."""
     from .sources.oriane import CANDIDATES, PUBLIC_FIGURES
 
-    notes = store.get_annotations(annotate.VERSION)
+    notes = annotate.notes()
     videos = [v for v in store.load_items("social")
               if v["id"] in notes and notes[v["id"]]["interet_public"] and notes[v["id"]].get("personnalites")]
     if not videos:
         return []
+    rates = _engagement_rates(videos)
     now = now or max(_day(v["published_at"]) for v in videos)
     recent_start = now - timedelta(days=config.WINDOW_RECENT)
     base_start = recent_start - timedelta(days=config.WINDOW_BASELINE)
@@ -266,16 +342,17 @@ def people(now: datetime | None = None) -> list[dict]:
     mentions: dict[str, list[dict]] = {}
     spellings: dict[str, Counter] = {}
     for v in videos:
-        for name in set(notes[v["id"]]["personnalites"]):
+        for name in set(annotate.names(notes[v["id"]])):
             key = _name_key(name)
             if len(key.split()) < 2:  # un nom seul (« Lisnard ») est rattaché au nom complet s'il existe
                 key = next((k for k in mentions if k.split()[-1] == key), key)
-            mentions.setdefault(key, []).append(v)
+            mentions.setdefault(key, []).append((v, name))
             spellings.setdefault(key, Counter())[name] += 1
 
     out = []
-    for key, vids in mentions.items():
-        vids = [v for v in vids if _day(v["published_at"]) <= now]
+    for key, cited in mentions.items():
+        cited = [(v, name) for v, name in cited if _day(v["published_at"]) <= now]
+        vids = [v for v, _ in cited]
         recent = [v for v in vids if _day(v["published_at"]) >= recent_start]
         base = [v for v in vids if base_start <= _day(v["published_at"]) < recent_start]
         creators = len({v["account"] for v in recent})
@@ -290,7 +367,14 @@ def people(now: datetime | None = None) -> list[dict]:
             "acceleration": round(accel, 2),
             "createurs_recents": creators,
             "score": round(accel * np.sqrt(creators), 3),
-            "tons": dict(Counter(notes[v["id"]]["ton"] for v in vids)),
+            # Comment les vidéos présentent la personne (et non le ton général de la vidéo).
+            "tons": dict(Counter(annotate.treatment(notes[v["id"]], name) for v, name in cited)),
+            "reactions": dict(Counter(notes[v["id"]]["reaction_public"] for v in vids
+                                      if notes[v["id"]].get("reaction_public", "sans commentaires") != "sans commentaires")),
+            # Totaux des vidéos lues (échantillon, sans extrapolation) sur la période récente.
+            "vues": round(sum(_views(v, rates) for v in recent)),
+            "interactions": sum(v["metrics"].get("likes", 0) + v["metrics"].get("comments", 0)
+                                + v["metrics"].get("shares", 0) for v in recent),
             "affirmations": [notes[v["id"]]["affirmation"] for v in sorted(recent, key=lambda v: -_w(v))[:5]],
             "videos": [v["id"] for v in vids],
         })

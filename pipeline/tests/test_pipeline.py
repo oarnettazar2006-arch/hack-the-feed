@@ -129,3 +129,58 @@ def test_couverture_connue_depuis():
     medias += [m("CNews", "youtube", "2026-10-30")]  # trop peu de contenus : ignoré
     known = coverage_known_since(medias)
     assert known == {"presse": "2026-10-21", "concurrents": "2026-10-27"}
+
+
+def test_citation_retrouvee_dans_la_video():
+    from htf.analyze import locate
+    m = {"chunks": [[0.0, "salut tout le monde"], [4.2, "le gouvernement veut taxer"], [6.0, "les livrets A des étudiants"]],
+         "frames": [[9.5, "https://x/f.webp", "ILS VEULENT TAXER TON LIVRET A"]]}
+    assert locate("le gouvernement veut taxer les livrets A", m) == {"seconde": 4.2}
+    assert locate("Ils veulent taxer ton livret A", m) == {"seconde": 9.5, "image": "https://x/f.webp"}
+    assert locate("une phrase absente de la vidéo entière", m) == {}
+
+
+def _video(i, hours, followers=1000, views=1000, account=None):
+    t0 = datetime(2026, 11, 1, tzinfo=timezone.utc)
+    return {"id": f"v{i}", "account": account or f"c{i}", "url": None, "source": "oriane",
+            "published_at": (t0 + timedelta(hours=hours)).isoformat(),
+            "metrics": {"views": views, "followers": followers, "likes": 0, "comments": 0, "shares": 0}}
+
+
+def test_video_pivot():
+    from htf.analyze import pivot
+    calm = [_video(i, i * 20) for i in range(5)]                      # 1 vidéo toutes les 20 h
+    early = _video(50, 30, followers=100, views=5000)                 # surperforme, mais rien ne suit
+    spark = _video(99, 120, followers=100, views=8000)                # surperforme, puis tout s'emballe
+    wave = [_video(100 + i, 122 + i * 2) for i in range(12)]
+    best, effect = pivot(calm + [early, spark] + wave, {"*": 0.05})
+    assert best["id"] == "v99" and effect["apres_48h"] == 12
+
+
+def test_preuve_hors_legende_et_anciennes_annotations():
+    from htf import annotate, store
+    from htf.analyze import evidence
+    vids = [_video(i, i, views=1000 * (10 - i)) for i in range(4)]
+    base = {"sujet": "s", "ton": "critique", "affirmation": "a", "personnalites": []}
+    v3 = lambda suffit, canal, cit: {**base, "legende_suffit": suffit, "canal": canal, "citation": cit,
+                                     "reaction_public": "rejet"}
+    store.save_annotations("v3", {"v0": v3(False, "paroles", "on paie deux fois plus cher"),
+                                  "v1": v3(False, "texte à l'écran", "loyer x2 en un an"),
+                                  "v2": v3(True, "légende", "")})
+    store.save_annotations("v2", {"v3": {**base, "personnalites": ["Marie Dupont"]}})  # ancienne annotation
+    notes = annotate.notes()
+    assert annotate.names(notes["v3"]) == ["Marie Dupont"] and annotate.treatment(notes["v3"], "Marie Dupont") == "critique"
+    proof = evidence(vids, notes, {"*": 0.05})
+    assert proof["videos_lues"] == 3 and proof["part_hors_legende"] == 0.67
+    assert [q["video"] for q in proof["citations"]] == ["v0", "v1"]
+
+
+def test_garde_fous_annotation():
+    from htf.annotate import _guard
+    text = "Paroles : le loyer a doublé en un an à Lyon\nLégende : ça suffit #logement"
+    note = {"reaction_public": "rejet", "citation": "le loyer a doublé en un an"}
+    _guard(note, text)
+    assert note == {"reaction_public": "sans commentaires", "citation": "le loyer a doublé en un an"}
+    note = {"reaction_public": "rejet", "citation": "les loyers explosent partout en France"}
+    _guard(note, text + "\nCommentaires populaires : honteux | pareil chez moi")
+    assert note == {"reaction_public": "rejet", "citation": ""}

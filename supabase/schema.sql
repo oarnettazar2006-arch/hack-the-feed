@@ -133,3 +133,22 @@ create policy "lecture" on personnalites for select using (true);
 grant select on personnalites to anon, authenticated;
 grant all on personnalites to service_role;
 grant usage, select on all sequences in schema public to service_role;
+
+-- Preuve dans la vidéo (ajout du 5/11, voir aussi migration_preuve.sql)
+alter table topics add column if not exists format_brut text;
+alter table topics add column if not exists declencheur_avant integer;
+alter table topics add column if not exists declencheur_apres integer;
+alter table topics add column if not exists part_hors_legende real;
+alter table topics add column if not exists videos_lues integer;
+alter table topics add column if not exists canaux jsonb;
+alter table topics add column if not exists reactions jsonb;
+alter table topics add column if not exists citations jsonb;
+alter table videos add column if not exists canal text;
+alter table videos add column if not exists legende_suffit boolean;
+alter table videos add column if not exists citation text;
+alter table videos add column if not exists reaction_public text;
+alter table videos add column if not exists miniature text;
+alter table brief add column if not exists format text;
+alter table personnalites add column if not exists reactions jsonb;
+alter table personnalites add column if not exists vues bigint;
+alter table personnalites add column if not exists interactions bigint;

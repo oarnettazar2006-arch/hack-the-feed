@@ -37,7 +37,7 @@ def run() -> dict:
         brief = []
     people_path = config.OUT_DIR / "people.json"
     persons = json.loads(people_path.read_text()) if people_path.exists() else []
-    notes = store.get_annotations(annotate.VERSION)
+    notes = annotate.notes()
     items = {i["id"]: i for i in store.load_items("social")}
 
     topic_rows, positions, coverage, videos = [], [], [], []
@@ -55,6 +55,14 @@ def run() -> dict:
             "couverture_presse_depuis": t.get("couverture_presse_depuis"),
             "couverture_concurrents_depuis": t.get("couverture_concurrents_depuis"),
             "couverture_complete": t.get("couverture_complete", False),
+            "format_brut": t.get("format_brut"),
+            "declencheur_avant": (t.get("declencheur_effet") or {}).get("avant_48h"),
+            "declencheur_apres": (t.get("declencheur_effet") or {}).get("apres_48h"),
+            "part_hors_legende": (t.get("preuve") or {}).get("part_hors_legende"),
+            "videos_lues": (t.get("preuve") or {}).get("videos_lues"),
+            "canaux": (t.get("preuve") or {}).get("canaux"),
+            "reactions": (t.get("preuve") or {}).get("reactions"),
+            "citations": (t.get("preuve") or {}).get("citations"),
         })
         position_of = {}
         for n, p in enumerate(t.get("positions", [])):
@@ -69,6 +77,8 @@ def run() -> dict:
                 "id": v["id"], "topic_id": t["id"], "position": position_of.get(v["id"]), "account": v["account"],
                 "platform": m.get("platform"), "published_at": v["published_at"], "url": v["url"], "contenu": v["text"],
                 "sujet": n["sujet"], "ton": n["ton"], "affirmation": n["affirmation"],
+                "canal": n.get("canal"), "legende_suffit": n.get("legende_suffit"), "citation": n.get("citation"),
+                "reaction_public": n.get("reaction_public"), "miniature": m.get("thumbnail"),
                 "views": m.get("views"), "likes": m.get("likes"), "shares": m.get("shares"),
                 "comments": m.get("comments"), "followers": m.get("followers"),
                 "est_declencheur": v["id"] == t["video_declencheur"], "est_phare": v["id"] in t["videos_phares"],
@@ -84,11 +94,12 @@ def run() -> dict:
         _insert(http, "topic_coverage", coverage)
         _insert(http, "videos", videos)
         _insert(http, "brief", [{"ordre": n, "topic_id": b["sujet"], "titre": b["titre"], "etat": b["etat"],
-                                 "pourquoi": b["pourquoi"], "angle": b["angle"],
+                                 "pourquoi": b["pourquoi"], "angle": b["angle"], "format": b.get("format"),
                                  "deja_traite_par": b["deja_traite_par"]} for n, b in enumerate(brief)])
         _insert(http, "personnalites", [{"rang": n + 1, **{k: p[k] for k in (
             "nom", "hors_liste", "videos_total", "videos_recentes", "acceleration", "createurs_recents", "score",
-            "tons", "affirmations")}} for n, p in enumerate(persons)])
+            "tons", "affirmations")}, "reactions": p.get("reactions"), "vues": p.get("vues"),
+            "interactions": p.get("interactions")} for n, p in enumerate(persons)])
     return {"sujets": len(topic_rows), "positions": len(positions), "couverture": len(coverage),
             "vidéos": len(videos), "brief": len(brief) or "aucun (lancer showcase après analyze)",
             "fiches Opus": sum(1 for t in topics if t.get("titre")), "personnalités": len(persons)}
