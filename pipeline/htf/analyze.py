@@ -322,7 +322,11 @@ def run(now: datetime | None = None) -> list[dict]:
             "videos_recentes": round(sum(map(w, recent))),
             "videos_echantillon": len(members),
             # Sujet trouvé uniquement par le filet aveugle : aucun de nos thèmes ne l'avait prévu.
-            "imprevu": all(v["metrics"].get("theme_query") == "veille ouverte" for v in members),
+            # Imprévu : uniquement trouvé par les filets sans mot-clé (veille ouverte, décollage).
+            "imprevu": all(v["metrics"].get("theme_query") in ("veille ouverte", "décollage") for v in members),
+            # Vidéos récentes qui font au moins 3 fois l'audience de leur créateur : le sujet décolle.
+            "videos_decollage": sum(1 for v in recent if v["metrics"].get("followers")
+                                    and _views(v, rates) >= 3 * v["metrics"]["followers"]),
             "coordination": coordination(members),
             "vues_estimees": sum(1 for v in members if not v["metrics"].get("views")),
             "signaux": {
@@ -461,6 +465,13 @@ def people(now: datetime | None = None) -> list[dict]:
     # Sondages (Wikipédia, commande `polls`) : score moyen, surexposition, et courbe longue des vidéos si mesurée.
     from . import polls
     out = polls.overexposure(out, now.date())
+    # Volumes réels (agrégations Oriane sur tout l'index, commande `oriane-volumes`), si mesurés.
+    volumes = store.cache_get("oriane:people_volumes") or {}
     for p in out:
         p["historique_videos"] = store.cache_get(f"polls:history:{p['nom']}")
+        v = volumes.get(p["nom"])
+        p["volume_reel"] = v
+        if v:
+            p["acceleration_reelle"] = round((v["videos_recentes"] / config.WINDOW_RECENT + 1) /
+                                             (v["videos_reference"] / config.WINDOW_BASELINE + 1), 2)
     return out

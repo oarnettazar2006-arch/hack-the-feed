@@ -52,6 +52,9 @@ def main() -> None:
     bt.add_argument("press_day", help="date du premier article, AAAA-MM-JJ")
     sub.add_parser("purge-fake", help="supprimer les fausses vidéos de test")
     sub.add_parser("cost", help="dépenses enregistrées")
+    dc = sub.add_parser("oriane-decollage", help="filet décollage : vidéos FR à ≥3× l'audience du créateur (crédits)")
+    dc.add_argument("--days", type=int, default=17)
+    sub.add_parser("oriane-volumes", help="volumes réels par personnalité, agrégations Oriane (crédits)")
     sub.add_parser("controle-echantillon", help="grille de 30 vidéos à annoter à la main (gratuit)")
     cc = sub.add_parser("controle-comparer", help="comparer la grille remplie à Haiku (gratuit)")
     cc.add_argument("fichier")
@@ -143,6 +146,12 @@ def main() -> None:
     elif args.cmd == "controle-comparer":
         from . import controle
         show(controle.compare(args.fichier))
+    elif args.cmd == "oriane-decollage":
+        show(oriane.collect_breakout(args.days))
+    elif args.cmd == "oriane-volumes":
+        from . import analyze as _an, politics
+        end = (_an._last_complete_day() or datetime.now()).date()
+        show(oriane.people_volumes(list(politics.AFFILIATIONS), end, config.WINDOW_RECENT, config.WINDOW_BASELINE))
     elif args.cmd == "cost":
         show({"total ($)": round(store.spent(), 4), "détail": store.cost_report()})
 

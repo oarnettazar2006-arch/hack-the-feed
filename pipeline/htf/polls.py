@@ -252,7 +252,11 @@ def overexposure(persons: list[dict], ref: date) -> list[dict]:
     press = press_mentions(start, ref.isoformat())
     pool = [p for p in persons if p["nom"] in avg]
     poll_total = sum(avg[p["nom"]]["moyenne"] for p in pool) or 1
-    social_total = sum(p["vues"] for p in pool) or 1
+    # Vues réelles (tout l'index Oriane) si elles ont été mesurées pour tout le groupe, sinon l'échantillon.
+    volumes = store.cache_get("oriane:people_volumes") or {}
+    real = all((volumes.get(p["nom"]) or {}).get("vues_recentes") is not None for p in pool) and pool
+    views_of = (lambda p: volumes[p["nom"]]["vues_recentes"] or 0) if real else (lambda p: p["vues"])
+    social_total = sum(views_of(p) for p in pool) or 1
     press_total = sum(press.get(p["nom"], 0) for p in pool) or 1
     for p in persons:
         a = avg.get(p["nom"])
@@ -262,7 +266,8 @@ def overexposure(persons: list[dict], ref: date) -> list[dict]:
         p["mentions_presse"] = press.get(p["nom"])
         if a and a["moyenne"] > 0:
             share = a["moyenne"] / poll_total
-            p["surexposition_videos"] = round(p["vues"] / social_total / share, 2)
+            p["surexposition_videos"] = round(views_of(p) / social_total / share, 2)
+            p["surexposition_source"] = "vues réelles (index Oriane)" if real else "vues de l'échantillon lu"
             p["surexposition_presse"] = round(press.get(p["nom"], 0) / press_total / share, 2)
         else:
             p["surexposition_videos"] = p["surexposition_presse"] = None

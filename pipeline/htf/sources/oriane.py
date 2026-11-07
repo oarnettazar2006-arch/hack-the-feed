@@ -88,6 +88,10 @@ THEMES = {
 # Filet aveugle : chaque jour, les vidéos françaises les plus commentées et partagées, sans mot-clé.
 # Le filtre d'intérêt public (annotation) écarte le divertissement ; il reste l'actualité imprévue.
 BLIND_NET = "veille ouverte"
+# Filet « décollage » (7/11) : vidéos FR qui font au moins 3 fois l'audience de leur créateur, sans mot-clé.
+# C'est le moment où un sujet décolle, avant d'être une tendance (le tri par interactions favorise les gros comptes).
+BREAKOUT_NET = "décollage"
+DISCOVERY_NETS = (BLIND_NET, BREAKOUT_NET)
 
 # Médias suivis sur TikTok et Instagram (base de couverture). Leurs comptes sont trouvés par la recherche
 # de profils d'Oriane (nom affiché ou compte proche, le plus suivi par plateforme), puis vérifiés à l'œil.
@@ -200,11 +204,19 @@ class Oriane:
 
     def search(self, filters: dict, queries: list | None = None, limit: int = 50, offset: int = 0,
                projection: str = "full", sort: str = "publishedAt:desc") -> tuple[list[dict], int]:
+        results, total, _ = self.search_meta(filters, queries, limit, offset, projection, sort)
+        return results, total
+
+    def search_meta(self, filters: dict, queries: list | None = None, limit: int = 50, offset: int = 0,
+                    projection: str = "full", sort: str = "publishedAt:desc") -> tuple[list[dict], int, dict]:
+        """Comme search, plus les agrégations d'Oriane sur TOUS les résultats (pas seulement la page) :
+        totalViewsCount, totalInteractionsCount, moyennes… Même prix que search."""
         body = {"operator": "and", "filters": filters}
         if queries:
             body["queries"] = queries
         res = self._post(body, {"limit": limit, "offset": offset, "projection": projection, "sort": sort})
-        return res["data"].get("results", []), res["metadata"].get("pagination", {}).get("totalCount", 0)
+        return (res["data"].get("results", []), res["metadata"].get("pagination", {}).get("totalCount", 0),
+                res["data"].get("aggregations") or {})
 
     def profiles(self, body: dict, limit: int = 5) -> list[dict]:
         res = self._post(body, {"limit": limit, "sort": "followersCount:desc"}, path="/rest/profiles/search")
@@ -347,6 +359,65 @@ def collect_social(days: int, per_day: int, themes: list[str] | None = None,
     store.cache_set("oriane:totals", totals)
     return {"vidéos enregistrées": saved, "appels": api.calls,
             "complétude de l'index par jour": {d: round(t / reference, 2) for d, t in sorted(day_totals.items())}}
+
+
+def collect_breakout(days: int = 17, per_day: int = 100, min_ratio: float = 300,
+                     platforms: tuple[str, ...] = ("tiktok", "instagram")) -> dict:
+    """Filet « décollage » : par jour, les vidéos FR dont les vues dépassent `min_ratio` % des abonnés,
+    triées par ce ratio. Découverte (poids 1) ; une vidéo déjà connue garde son thème et son poids."""
+    api = Oriane()
+    today = datetime.now(timezone.utc).date()
+    base = {"platform": {"includes": list(platforms)}, "format": {"includes": ["video"]},
+            "viewsRatePerFollowers": {"min": min_ratio}}
+    day_list = [(today - timedelta(days=d)).isoformat() for d in range(days)]
+    totals, saved = {}, 0
+
+    def one(day: str) -> int:
+        results, total, aggs = api.search_meta({**base, "publishedAt": {"after": day, "before": day}}, [FRENCH],
+                                               limit=per_day, sort="viewsRatePerFollowers:desc")
+        totals[day] = {"videos": total, "vues": aggs.get("totalViewsCount")}
+        known = store.existing_ids([f"oriane:{r['id']}" for r in results])
+        return store.upsert_items([to_item(r, BREAKOUT_NET, 1) for r in results if f"oriane:{r['id']}" not in known])
+
+    try:
+        with ThreadPoolExecutor(max_workers=config.ORIANE_WORKERS) as pool:
+            saved = sum(pool.map(one, day_list))
+    except OrianeCreditsExhausted as e:
+        return {"arrêt": str(e), "vidéos enregistrées": saved, "appels": api.calls}
+    store.cache_set("oriane:breakout_totals", totals)
+    return {"vidéos nouvelles": saved, "appels": api.calls,
+            "vidéos en décollage par jour (FR, total Oriane)": {d: t["videos"] for d, t in sorted(totals.items())}}
+
+
+def people_volumes(names: list[str], end: date, recent_days: int, base_days: int) -> dict:
+    """Volumes RÉELS (tout l'index, pas l'échantillon) des vidéos FR citant chaque personnalité, sur la période
+    récente et la période de référence : nombre, vues et interactions totales (agrégations). 2 appels basic
+    par nom (10 crédits chacun)."""
+    api = Oriane()
+    base = {"platform": {"includes": ["tiktok", "instagram"]}, "format": {"includes": ["video"]}}
+    r_start = end - timedelta(days=recent_days - 1)
+    b_start = r_start - timedelta(days=base_days)
+    out = {}
+
+    def one(name: str) -> tuple[str, dict]:
+        q = [FRENCH, theme_query(name, [name])]
+        _, n_r, a_r = api.search_meta({**base, "publishedAt": {"after": r_start.isoformat(), "before": end.isoformat()}},
+                                      q, limit=1, projection="basic")
+        _, n_b, a_b = api.search_meta({**base, "publishedAt": {"after": b_start.isoformat(),
+                                                                 "before": (r_start - timedelta(days=1)).isoformat()}},
+                                      q, limit=1, projection="basic")
+        return name, {"videos_recentes": n_r, "vues_recentes": a_r.get("totalViewsCount"),
+                      "interactions_recentes": a_r.get("totalInteractionsCount"),
+                      "videos_reference": n_b, "vues_reference": a_b.get("totalViewsCount"),
+                      "periode": f"{r_start} → {end} (référence {b_start} → {r_start - timedelta(days=1)})"}
+
+    try:
+        with ThreadPoolExecutor(max_workers=config.ORIANE_WORKERS) as pool:
+            out = dict(pool.map(one, names))
+    except OrianeCreditsExhausted as e:
+        return {"arrêt": str(e)}
+    store.cache_set("oriane:people_volumes", out)
+    return {"personnalités": len(out), "appels": api.calls}
 
 
 PROFILES_FILE = config.ROOT / "docs" / "oriane-media-profiles.json"

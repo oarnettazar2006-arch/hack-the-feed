@@ -66,6 +66,7 @@ def run() -> dict:
             "campagne": t.get("campagne", False), "personnalites": t.get("personnalites", []),
             "camps": t.get("camps", {}),
             "signal_faible": t.get("signal_faible", False), "vu_jusqu_au": t.get("vu_jusqu_au"),
+            "videos_decollage": t.get("videos_decollage", 0),
         })
         position_of = {}
         for n, p in enumerate(t.get("positions", [])):
@@ -107,7 +108,7 @@ def run() -> dict:
             "video_phare", "video_phare_url", "video_phare_compte", "video_phare_traitement",
             "sondage", "sondage_detail", "mentions_presse", "surexposition_videos", "surexposition_presse",
             "sondages_serie", "historique_videos", "teste_depuis", "colonne_propre_depuis",
-            "visibilite_comparable")}}
+            "visibilite_comparable", "volume_reel", "acceleration_reelle", "surexposition_source")}}
             for n, p in enumerate(persons)])
     return {"sujets": len(topic_rows), "positions": len(positions), "couverture": len(coverage),
             "vidéos": len(videos), "brief": len(brief) or "aucun (lancer showcase après analyze)",

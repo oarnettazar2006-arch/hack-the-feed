@@ -2,6 +2,7 @@
 import json
 import os
 import time
+from datetime import datetime
 
 import httpx
 
@@ -78,6 +79,14 @@ def run(run_id: str, days: int, per_day: int, top: int, collect: bool, ask) -> d
         steps["fausses vidéos supprimées"] = store.purge_fake()
         step("collecte Oriane (thèmes + filet aveugle)", lambda: oriane.collect_social(days, per_day))
         step("collecte Oriane (comptes médias)", oriane.collect_media)
+        step("collecte Oriane (filet décollage)", lambda: oriane.collect_breakout(days))
+
+        def do_volumes():
+            from . import analyze as _an, politics
+            end = (_an._last_complete_day() or datetime.now()).date()
+            return oriane.people_volumes(list(politics.AFFILIATIONS), end, config.WINDOW_RECENT, config.WINDOW_BASELINE)
+
+        step("volumes réels des personnalités (Oriane)", do_volumes)
     step("collecte presse et YouTube", media.collect)
     step("annotation des vidéos (Haiku)", lambda: annotate.annotate_social(run_id))
     step("annotation des médias (Haiku)", lambda: annotate.annotate_media(run_id))
