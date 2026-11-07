@@ -115,6 +115,15 @@ def run(run_id: str, days: int, per_day: int, top: int, collect: bool, ask) -> d
 
     step("fiches Opus et brief", do_showcase)
     step("export Supabase", export.run)
+
+    def do_visuals():
+        from . import visuels
+        try:
+            return visuels.run()
+        except Exception as e:  # un graphique raté ne doit jamais faire échouer la chaîne
+            return {"erreur": str(e)[:200]}
+
+    step("graphiques (docs/visuels)", do_visuals)
     return {"durée totale (min)": round((time.time() - started) / 60, 1),
             "dépense Claude de l'exécution ($)": round(store.spent(run_id), 3),
             "dépense Claude totale ($)": round(store.spent(), 3)}

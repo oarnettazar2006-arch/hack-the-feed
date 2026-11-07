@@ -5,3 +5,4 @@
 cd "$(dirname "$0")/../pipeline" || exit 1
 echo "=== $(date '+%Y-%m-%d %H:%M') ===" >> ../data/logs/sondages.log
 ../.venv/bin/python -m htf.cli polls --export >> ../data/logs/sondages.log 2>&1
+../.venv/bin/python -m htf.cli visuels >> ../data/logs/sondages.log 2>&1
