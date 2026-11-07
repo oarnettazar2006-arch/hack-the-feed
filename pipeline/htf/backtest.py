@@ -57,10 +57,31 @@ def measure(run_id: str, story: str, press_day: str, before: int = 10, after: in
                               limit=1, projection="basic")
         c = completeness.get(day, 1.0) or 1.0
         series.append({"jour": day, "ecart": offset, "videos": round(total / c)})
-    on_day = next(p["videos"] for p in series if p["ecart"] == 0) or max(p["videos"] for p in series) or 1
-    rising = [p for p in series if p["ecart"] <= 0 and p["videos"] >= on_day / 4]
+    # Garde-fous ajoutés le 7/11 après un premier passage trompeur :
+    # - il faut un vrai volume (≥ 5 vidéos par jour) ; 2 vidéos isolées ne font pas une avance ;
+    # - la date du « premier article » n'a de sens que si nos archives presse couvrent les jours d'avant.
+    min_videos = 5
+    on_day = next(p["videos"] for p in series if p["ecart"] == 0)
+    peak = max(p["videos"] for p in series)
+    level = max(on_day, peak / 2, min_videos)
+    rising = [p for p in series if p["ecart"] <= 0 and p["videos"] >= max(level / 4, min_videos)]
     lead = -rising[0]["ecart"] if rising else 0
+    press_known = _press_known_since()
+    reliable_press_date = bool(press_known) and press_known <= (d0 - timedelta(days=before)).isoformat()
+    if peak < min_videos:
+        verdict = "Pas de signal sur TikTok et Instagram : trop peu de vidéos sur cette histoire."
+    elif not reliable_press_date:
+        verdict = (f"Non concluant : nos archives presse commencent le {press_known}, on ne sait pas si la presse "
+                   f"en parlait avant le {press_day}.")
+    elif lead:
+        verdict = f"Sur TikTok et Instagram, le sujet montait {lead} jour(s) avant le premier article de presse."
+    else:
+        verdict = "Pas d'avance des réseaux sur la presse pour cette histoire."
     return {"histoire": story, "premier_article": press_day, "expressions": found.expressions[:5],
-            "avance_reseaux_jours": lead, "serie": series, "appels": api.calls,
-            "phrase": (f"Sur TikTok et Instagram, le sujet montait {lead} jour(s) avant le premier article de presse."
-                       if lead else "Pas d'avance mesurable des réseaux sur la presse pour cette histoire.")}
+            "avance_reseaux_jours": lead if peak >= min_videos and reliable_press_date else None,
+            "presse_connue_depuis": press_known, "serie": series, "appels": api.calls, "phrase": verdict}
+
+
+def _press_known_since() -> str | None:
+    days = [m["published_at"][:10] for m in store.load_items("media") if m["source"] in ("archive", "rss")]
+    return min(days) if days else None

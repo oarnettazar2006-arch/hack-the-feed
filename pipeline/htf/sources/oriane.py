@@ -257,6 +257,10 @@ def to_item(r: dict, theme: str | None, weight: float, kind: str = "social", gro
         url = f"https://www.tiktok.com/@{handle}/video/{r['platformId']}"
     elif platform == "youtube" and r.get("platformId"):
         url = f"https://www.youtube.com/watch?v={r['platformId']}"
+    elif platform == "instagram" and handle:
+        # Oriane ne donne pas le code court du post Instagram (seulement un identifiant numérique) :
+        # lien de repli vers le compte, signalé par `lien_compte` pour que l'interface l'écrive.
+        url = f"https://www.instagram.com/{handle}/"
     return {
         "id": f"oriane:{r['id']}",
         "kind": kind,
@@ -273,7 +277,8 @@ def to_item(r: dict, theme: str | None, weight: float, kind: str = "social", gro
             "followers": r.get("profileFollowersCount") or 0, "platform": platform, "handle": handle,
             "theme_query": theme, "weight": weight, "thumbnail": r.get("thumbnailMediaUrl"),
             "comments_text": comments, "hashtags": r.get("hashtags") or [],
-            "chunks": chunks, "frames": frames,
+            "chunks": chunks, "frames": frames, "platform_id": r.get("platformId"),
+            "lien_compte": platform == "instagram",
         },
     }
 

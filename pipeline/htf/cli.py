@@ -52,6 +52,9 @@ def main() -> None:
     bt.add_argument("press_day", help="date du premier article, AAAA-MM-JJ")
     sub.add_parser("purge-fake", help="supprimer les fausses vidéos de test")
     sub.add_parser("cost", help="dépenses enregistrées")
+    sub.add_parser("controle-echantillon", help="grille de 30 vidéos à annoter à la main (gratuit)")
+    cc = sub.add_parser("controle-comparer", help="comparer la grille remplie à Haiku (gratuit)")
+    cc.add_argument("fichier")
     sub.add_parser("visuels", help="graphiques PNG dans docs/visuels (gratuit)")
     po = sub.add_parser("polls", help="relever les sondages présidentielle 2027 sur Wikipédia (gratuit)")
     po.add_argument("--export", action="store_true", help="envoyer l'historique dans Supabase")
@@ -134,6 +137,12 @@ def main() -> None:
     elif args.cmd == "visuels":
         from . import visuels
         show(visuels.run())
+    elif args.cmd == "controle-echantillon":
+        from . import controle
+        show(controle.sample())
+    elif args.cmd == "controle-comparer":
+        from . import controle
+        show(controle.compare(args.fichier))
     elif args.cmd == "cost":
         show({"total ($)": round(store.spent(), 4), "détail": store.cost_report()})
 

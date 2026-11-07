@@ -51,7 +51,8 @@ AFFILIATIONS = {
 # Personnalités étrangères très citées : jamais signalées comme « repérées seules » dans la campagne française.
 INTERNATIONAL = ["Donald Trump", "Vladimir Poutine", "Volodymyr Zelensky", "Benyamin Netanyahou", "Joe Biden",
                  "Kamala Harris", "Elon Musk", "Xi Jinping", "Giorgia Meloni", "Friedrich Merz", "Keir Starmer",
-                 "Mark Carney", "Flavio Bolsonaro", "Jair Bolsonaro", "Christine Lagarde", "Ursula von der Leyen"]
+                 "Mark Carney", "Flavio Bolsonaro", "Jair Bolsonaro", "Christine Lagarde", "Ursula von der Leyen",
+                 "Ousmane Sonko", "Bassirou Diomaye Faye"]
 
 CAMP_ORDER = ["extrême gauche", "gauche radicale", "gauche", "écologistes", "centre", "droite",
               "souverainistes", "extrême droite", "divers"]
