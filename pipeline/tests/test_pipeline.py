@@ -184,3 +184,14 @@ def test_garde_fous_annotation():
     note = {"reaction_public": "rejet", "citation": "les loyers explosent partout en France"}
     _guard(note, text + "\nCommentaires populaires : honteux | pareil chez moi")
     assert note == {"reaction_public": "rejet", "citation": ""}
+
+
+def test_affiliations_politiques():
+    from htf import politics
+    assert politics.affiliation("David Lisnard")[1] == "droite"
+    assert politics.affiliation("Lisnard")[1] == "droite"            # nom seul, sans ambiguïté
+    assert politics.affiliation("Brigitte Macron") == (None, None)   # même nom, autre personne
+    assert politics.affiliation("Jean-Marie Le Pen") == (None, None)
+    assert politics.affiliation("Donald Trump")[1] == "international"
+    assert politics.is_campaign_figure("Marine Le Pen")
+    assert not politics.is_campaign_figure("Emmanuel Macron")        # ne peut pas se représenter

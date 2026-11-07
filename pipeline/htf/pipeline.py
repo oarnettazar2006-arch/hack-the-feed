@@ -36,8 +36,12 @@ def check(with_oriane: bool = False) -> dict:
                        if http.get(f"/{t}", params={"select": "*", "limit": 1}).status_code != 200]
             # Colonnes ajoutées le 5/11 : présentes seulement si migration_preuve.sql a été exécutée.
             new_cols = http.get("/topics", params={"select": "citations,format_brut", "limit": 1}).status_code == 200
-        report["Supabase"] = ("ok" if not missing and new_cols else f"tables inaccessibles : {missing}" if missing
-                              else "exécuter supabase/migration_preuve.sql dans l'éditeur SQL de Supabase")
+            # Colonnes du 7/11 (migration_politique.sql).
+            pol_cols = (http.get("/topics", params={"select": "campagne,camps", "limit": 1}).status_code == 200 and
+                        http.get("/personnalites", params={"select": "camp,serie,part_de_voix", "limit": 1}).status_code == 200)
+        report["Supabase"] = ("ok" if not missing and new_cols and pol_cols else f"tables inaccessibles : {missing}" if missing
+                              else "exécuter supabase/migration_preuve.sql dans l'éditeur SQL de Supabase" if not new_cols
+                              else "exécuter supabase/migration_politique.sql dans l'éditeur SQL de Supabase")
     except Exception as e:
         report["Supabase"] = f"ERREUR {str(e)[:100]}"
 

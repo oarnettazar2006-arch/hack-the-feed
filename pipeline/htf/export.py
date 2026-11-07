@@ -63,6 +63,8 @@ def run() -> dict:
             "canaux": (t.get("preuve") or {}).get("canaux"),
             "reactions": (t.get("preuve") or {}).get("reactions"),
             "citations": (t.get("preuve") or {}).get("citations"),
+            "campagne": t.get("campagne", False), "personnalites": t.get("personnalites", []),
+            "camps": t.get("camps", {}),
         })
         position_of = {}
         for n, p in enumerate(t.get("positions", [])):
@@ -99,7 +101,10 @@ def run() -> dict:
         _insert(http, "personnalites", [{"rang": n + 1, **{k: p[k] for k in (
             "nom", "hors_liste", "videos_total", "videos_recentes", "acceleration", "createurs_recents", "score",
             "tons", "affirmations")}, "reactions": p.get("reactions"), "vues": p.get("vues"),
-            "interactions": p.get("interactions")} for n, p in enumerate(persons)])
+            "interactions": p.get("interactions"), **{k: p.get(k) for k in (
+            "parti", "camp", "tendance", "solde", "surperformance", "taux_engagement", "serie", "part_de_voix",
+            "video_phare", "video_phare_url", "video_phare_compte", "video_phare_traitement")}}
+            for n, p in enumerate(persons)])
     return {"sujets": len(topic_rows), "positions": len(positions), "couverture": len(coverage),
             "vidéos": len(videos), "brief": len(brief) or "aucun (lancer showcase après analyze)",
             "fiches Opus": sum(1 for t in topics if t.get("titre")), "personnalités": len(persons)}

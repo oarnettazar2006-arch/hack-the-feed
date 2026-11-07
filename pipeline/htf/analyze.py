@@ -207,6 +207,13 @@ def _state(accel: float, recent: int, total: int, covered: bool, coverage_comple
     return state
 
 
+def _last_complete_day() -> datetime | None:
+    """Avec Oriane, l'analyse s'arrête au dernier jour indexé à au moins 50 % (les jours suivants sont ignorés)."""
+    completeness = store.cache_get("oriane:day_completeness") or {}
+    complete_days = [d for d, c in completeness.items() if c >= 0.5]
+    return datetime.fromisoformat(max(complete_days) + "T23:59:59+00:00") if complete_days else None
+
+
 def run(now: datetime | None = None) -> list[dict]:
     notes = annotate.notes()
     videos = [v for v in store.load_items("social") if v["id"] in notes]
@@ -214,12 +221,7 @@ def run(now: datetime | None = None) -> list[dict]:
     if not videos:
         return []
     # Avec Oriane, le score s'arrête au dernier jour indexé à au moins 50 % (les jours suivants sont ignorés).
-    completeness = store.cache_get("oriane:day_completeness") or {}
-    if now is None and completeness:
-        complete_days = [d for d, c in completeness.items() if c >= 0.5]
-        if complete_days:
-            now = datetime.fromisoformat(max(complete_days) + "T23:59:59+00:00")
-    now = now or max(_day(v["published_at"]) for v in videos)
+    now = now or _last_complete_day() or max(_day(v["published_at"]) for v in videos)
     videos = [v for v in videos if _day(v["published_at"]) <= now]
     recent_start = now - timedelta(days=config.WINDOW_RECENT)
     base_start = recent_start - timedelta(days=config.WINDOW_BASELINE)
@@ -276,6 +278,12 @@ def run(now: datetime | None = None) -> list[dict]:
         themes = Counter(t for n in member_notes for t in n["themes"])
         tones = Counter(n["ton"] for n in member_notes)
         launcher, launch_effect = pivot(members, rates)
+        from . import politics
+        cited = Counter(n for note in member_notes for n in set(annotate.names(note)))
+        figures = [n for n, _ in cited.most_common() if politics.is_campaign_figure(n)]
+        campaign_share = sum(1 for note in member_notes
+                             if any(politics.is_campaign_figure(n) for n in annotate.names(note))) / len(member_notes)
+        campaign_net = sum(1 for v in members if str(v["metrics"].get("theme_query", "")).startswith("campagne 2027"))
         top_videos = sorted(members, key=lambda v: -_views(v, rates))[:12]
 
         topics.append({
@@ -283,6 +291,11 @@ def run(now: datetime | None = None) -> list[dict]:
             "sujet_type": Counter(n["sujet"] for n in member_notes).most_common(1)[0][0],
             "politique": sum(n["politique"] for n in member_notes) > len(member_notes) / 2,
             "themes": [t for t, _ in themes.most_common(3)],
+            # Sujet de campagne : une personnalité de la campagne dans au moins un quart des vidéos,
+            # ou la majorité des vidéos ramenées par les filets « campagne 2027 » (avec au moins une personnalité citée).
+            "campagne": bool(figures) and (campaign_share >= 0.25 or campaign_net > len(members) / 2),
+            "personnalites": figures[:4],
+            "camps": dict(Counter(politics.affiliation(n)[1] for n in figures[:8])),
             "videos_total": round(sum(map(_w, members))),
             "videos_recentes": round(sum(map(_w, recent))),
             "videos_echantillon": len(members),
@@ -332,6 +345,7 @@ def _name_key(name: str) -> str:
 def people(now: datetime | None = None) -> list[dict]:
     """Personnalités citées dans les vidéos, classées par émergence. Signale celles absentes de nos listes."""
     from .sources.oriane import CANDIDATES, PUBLIC_FIGURES
+    from . import politics
 
     notes = annotate.notes()
     videos = [v for v in store.load_items("social")
@@ -339,7 +353,7 @@ def people(now: datetime | None = None) -> list[dict]:
     if not videos:
         return []
     rates = _engagement_rates(videos)
-    now = now or max(_day(v["published_at"]) for v in videos)
+    now = now or _last_complete_day() or max(_day(v["published_at"]) for v in videos)
     recent_start = now - timedelta(days=config.WINDOW_RECENT)
     base_start = recent_start - timedelta(days=config.WINDOW_BASELINE)
     known = {_name_key(n) for n in CANDIDATES + PUBLIC_FIGURES}
@@ -362,12 +376,42 @@ def people(now: datetime | None = None) -> list[dict]:
         recent = [v for v in vids if _day(v["published_at"]) >= recent_start]
         base = [v for v in vids if base_start <= _day(v["published_at"]) < recent_start]
         creators = len({v["account"] for v in recent})
-        if len(vids) < config.MIN_VIDEOS // 2 or creators < 3:
+        # Élargi le 7/11 : une personnalité de la campagne reste visible même si peu de créateurs en parlent
+        # cette semaine (c'est justement l'information « en baisse »). Les inconnues gardent un seuil plus haut.
+        nom = spellings[key].most_common(1)[0][0]
+        parti, camp = politics.affiliation(nom)
+        all_creators = len({v["account"] for v in vids})
+        if camp in (None, "international"):
+            if len(vids) < config.MIN_VIDEOS // 2 or creators < 3:
+                continue
+        elif len(vids) < 3 or all_creators < 2:
             continue
         accel = (sum(map(_w, recent)) / config.WINDOW_RECENT + 1) / (sum(map(_w, base)) / config.WINDOW_BASELINE + 1)
+        names_of = {v["id"]: name for v, name in cited}
+        treat = Counter(annotate.treatment(notes[v["id"]], name) for v, name in cited)
+        n_treat = sum(treat.values()) or 1
+        ratios = [_views(v, rates) / max(v["metrics"].get("followers", 0), 1) for v in recent]
+        recent_views = sum(_views(v, rates) for v in recent)
+        recent_inter = sum(v["metrics"].get("likes", 0) + v["metrics"].get("comments", 0)
+                           + v["metrics"].get("shares", 0) for v in recent)
+        days = Counter(_day(v["published_at"]).date().isoformat() for v in vids)
+        first_day = (now - timedelta(days=config.WINDOW_RECENT + config.WINDOW_BASELINE)).date()
+        top = max(vids, key=lambda v: _views(v, rates))
         out.append({
-            "nom": spellings[key].most_common(1)[0][0],
-            "hors_liste": key not in known and key.split()[-1] not in known_last,
+            "nom": nom,
+            "parti": parti,
+            "camp": camp,
+            "tendance": "monte" if accel >= 1.5 else "baisse" if accel < 0.7 else "stable",
+            # (favorable − critique − ironique) / vidéos : de −1 (attaqué partout) à +1 (soutenu partout).
+            "solde": round((treat["favorable"] - treat["critique"] - treat["ironique"]) / n_treat, 2),
+            "surperformance": round(float(np.median(ratios)), 2) if ratios else None,
+            "taux_engagement": round(recent_inter / recent_views, 4) if recent_views else None,
+            "serie": [{"jour": (first_day + timedelta(days=d)).isoformat(),
+                       "videos": days.get((first_day + timedelta(days=d)).isoformat(), 0)}
+                      for d in range(config.WINDOW_RECENT + config.WINDOW_BASELINE + 1)],
+            "video_phare": top["id"], "video_phare_url": top["url"], "video_phare_compte": top["account"],
+            "video_phare_traitement": annotate.treatment(notes[top["id"]], names_of[top["id"]]),
+            "hors_liste": camp != "international" and key not in known and key.split()[-1] not in known_last,
             "videos_total": round(sum(map(_w, vids))),
             "videos_recentes": round(sum(map(_w, recent))),
             "acceleration": round(accel, 2),
@@ -384,5 +428,9 @@ def people(now: datetime | None = None) -> list[dict]:
             "affirmations": [notes[v["id"]]["affirmation"] for v in sorted(recent, key=lambda v: -_w(v))[:5]],
             "videos": [v["id"] for v in vids],
         })
+    # Part de voix : part des vues récentes de toutes les personnalités françaises suivies.
+    total = sum(p["vues"] for p in out if p["camp"] not in (None, "international")) or 1
+    for p in out:
+        p["part_de_voix"] = round(p["vues"] / total, 3) if p["camp"] not in (None, "international") else None
     out.sort(key=lambda p: (-p["score"]))
     return out
