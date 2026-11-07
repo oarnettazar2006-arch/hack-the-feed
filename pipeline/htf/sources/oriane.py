@@ -132,13 +132,24 @@ class OrianeCreditsExhausted(RuntimeError):
     pass
 
 
+def _env_keys(env) -> list[str]:
+    """Clés Oriane dans l'ordre d'usage : celles des camarades d'abord (ORIANE_API_KEY_2, _3, puis
+    ORIANE_API_KEYS séparées par des virgules), la clé principale ORIANE_API_KEY en dernier (épuisée le 7/11)."""
+    keys = [env.get("ORIANE_API_KEY_2"), env.get("ORIANE_API_KEY_3"),
+            *(env.get("ORIANE_API_KEYS") or "").split(","), env.get("ORIANE_API_KEY")]
+    out = []
+    for k in keys:
+        k = (k or "").strip()
+        if k and k not in out:
+            out.append(k)
+    return out
+
+
 class Oriane:
     def __init__(self, api_key: str | None = None):
         # Plusieurs comptes possibles (crédits hackathon par personne) : ORIANE_API_KEYS=clé1,clé2,clé3.
         # Quand une clé n'a plus de crédits (402), on passe à la suivante.
-        keys = [api_key] if api_key else [k.strip() for k in os.environ.get("ORIANE_API_KEYS", "").split(",") if k.strip()]
-        if not keys and os.environ.get("ORIANE_API_KEY"):
-            keys = [os.environ["ORIANE_API_KEY"]]
+        keys = [api_key] if api_key else _env_keys(os.environ)
         if not keys:
             raise RuntimeError("ORIANE_API_KEY (ou ORIANE_API_KEYS) doit être rempli dans .env")
         self.keys = keys
@@ -169,8 +180,7 @@ class Oriane:
                     if key == self.key and self.key_index + 1 >= len(self.keys):
                         # Clés ajoutées dans .env pendant la collecte : on les relit avant d'abandonner.
                         from dotenv import dotenv_values
-                        extra = [k.strip() for k in (dotenv_values(config.ROOT / ".env").get("ORIANE_API_KEYS") or "").split(",")
-                                 if k.strip() and k.strip() not in self.keys]
+                        extra = [k for k in _env_keys(dotenv_values(config.ROOT / ".env")) if k not in self.keys]
                         self.keys += extra
                     if key == self.key and self.key_index + 1 < len(self.keys):
                         self.key_index += 1
