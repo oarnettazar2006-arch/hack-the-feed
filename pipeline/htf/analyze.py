@@ -184,7 +184,8 @@ def coverage_known_since(medias: list[dict]) -> dict:
     return known
 
 
-STATE_ORDER = {"à traiter maintenant": 0, "course de vitesse": 1, "à surveiller": 2, "déjà repéré": 3,
+STATE_ORDER = {"à traiter maintenant": 0, "course de vitesse": 1, "à surveiller": 2, "signal faible": 2.5,
+               "déjà repéré": 3,
                "en hausse": 3, "angle mort durable": 4, "stable": 5, "en baisse": 6}
 
 
@@ -214,6 +215,12 @@ def _last_complete_day() -> datetime | None:
     return datetime.fromisoformat(max(complete_days) + "T23:59:59+00:00") if complete_days else None
 
 
+def _last_fresh_day(threshold: float = 0.1) -> datetime | None:
+    completeness = store.cache_get("oriane:day_completeness") or {}
+    days = [d for d, c in completeness.items() if c >= threshold]
+    return datetime.fromisoformat(max(days) + "T23:59:59+00:00") if days else None
+
+
 def run(now: datetime | None = None) -> list[dict]:
     notes = annotate.notes()
     videos = [v for v in store.load_items("social") if v["id"] in notes]
@@ -221,8 +228,13 @@ def run(now: datetime | None = None) -> list[dict]:
     if not videos:
         return []
     # Avec Oriane, le score s'arrête au dernier jour indexé à au moins 50 % (les jours suivants sont ignorés).
+    explicit_now = now is not None
     now = now or _last_complete_day() or max(_day(v["published_at"]) for v in videos)
-    videos = [v for v in videos if _day(v["published_at"]) <= now]
+    # Signaux faibles : on lit aussi les jours indexés à au moins 10 % après `now` (retard d'Oriane),
+    # en comptant les vidéos sans les extrapoler. Le score principal, lui, s'arrête à `now`.
+    fresh_end = now if explicit_now else max(now, _last_fresh_day() or now)
+    fresh_start = fresh_end - timedelta(days=4)
+    videos = [v for v in videos if _day(v["published_at"]) <= fresh_end]
     recent_start = now - timedelta(days=config.WINDOW_RECENT)
     base_start = recent_start - timedelta(days=config.WINDOW_BASELINE)
 
@@ -238,13 +250,23 @@ def run(now: datetime | None = None) -> list[dict]:
     topics = []
     for label in sorted(set(labels)):
         idx = np.where(labels == label)[0]
-        members = [kept[i] for i in idx]
-        if len(members) < config.MIN_VIDEOS or len({v["account"] for v in members}) < config.MIN_CREATORS:
+        everyone = [kept[i] for i in idx]
+        members = [v for v in everyone if _day(v["published_at"]) <= now]
+        main = len(members) >= config.MIN_VIDEOS and len({v["account"] for v in members}) >= config.MIN_CREATORS
+        fresh = [v for v in everyone if _day(v["published_at"]) >= fresh_start]
+        # Signal faible : trop petit pour le radar, mais neuf (70 % des vidéos dans les 5 derniers jours lisibles)
+        # et porté par au moins 3 créateurs différents. C'est ce qu'il faut voir avant que ça devienne une tendance.
+        weak = (not main and len(everyone) >= 3 and len({v["account"] for v in fresh}) >= 3
+                and len(fresh) / len(everyone) >= 0.7)
+        if not main and not weak:
             continue
-        recent = [v for v in members if _day(v["published_at"]) >= recent_start]
+        if weak:
+            members = everyone
+        recent = fresh if weak else [v for v in members if _day(v["published_at"]) >= recent_start]
         base = [v for v in members if base_start <= _day(v["published_at"]) < recent_start]
-        recent_per_day = sum(map(_w, recent)) / config.WINDOW_RECENT
-        base_per_day = sum(map(_w, base)) / config.WINDOW_BASELINE
+        w = (lambda v: 1.0) if weak else _w  # jours partiels : on compte, on n'extrapole pas
+        recent_per_day = sum(map(w, recent)) / (5 if weak else config.WINDOW_RECENT)
+        base_per_day = sum(map(w, base)) / config.WINDOW_BASELINE
         accel = (recent_per_day + 1) / (base_per_day + 1)
         creators_recent = len({v["account"] for v in recent})
         ratios = [_views(v, rates) / max(v["metrics"].get("followers", 0), 1) for v in recent] or [0]
@@ -268,11 +290,11 @@ def run(now: datetime | None = None) -> list[dict]:
 
         days = Counter()
         for v in members:
-            days[_day(v["published_at"]).date().isoformat()] += _w(v)
+            days[_day(v["published_at"]).date().isoformat()] += w(v)
         first_day = (now - timedelta(days=config.WINDOW_RECENT + config.WINDOW_BASELINE)).date()
         series = [{"jour": (first_day + timedelta(days=d)).isoformat(),
                    "videos": round(days.get((first_day + timedelta(days=d)).isoformat(), 0))}
-                  for d in range(config.WINDOW_RECENT + config.WINDOW_BASELINE + 1)]
+                  for d in range(config.WINDOW_RECENT + config.WINDOW_BASELINE + 1 + ((fresh_end - now).days if weak else 0))]
 
         member_notes = [notes[v["id"]] for v in members]
         themes = Counter(t for n in member_notes for t in n["themes"])
@@ -296,8 +318,8 @@ def run(now: datetime | None = None) -> list[dict]:
             "campagne": bool(figures) and (campaign_share >= 0.25 or campaign_net > len(members) / 2),
             "personnalites": figures[:4],
             "camps": dict(Counter(politics.affiliation(n)[1] for n in figures[:8])),
-            "videos_total": round(sum(map(_w, members))),
-            "videos_recentes": round(sum(map(_w, recent))),
+            "videos_total": round(sum(map(w, members))),
+            "videos_recentes": round(sum(map(w, recent))),
             "videos_echantillon": len(members),
             # Sujet trouvé uniquement par le filet aveugle : aucun de nos thèmes ne l'avait prévu.
             "imprevu": all(v["metrics"].get("theme_query") == "veille ouverte" for v in members),
@@ -318,7 +340,10 @@ def run(now: datetime | None = None) -> list[dict]:
             "couverture_presse_depuis": known_since["presse"],
             "couverture_concurrents_depuis": known_since["concurrents"],
             "couverture_complete": coverage_complete,
-            "etat": _state(accel, len(recent), len(members), covered, coverage_complete),
+            "etat": ("déjà repéré" if covered else "signal faible") if weak
+                    else _state(accel, len(recent), len(members), covered, coverage_complete),
+            "signal_faible": weak,
+            "vu_jusqu_au": (fresh_end if weak else now).date().isoformat(),
             "serie": series,
             "video_declencheur": launcher["id"],
             "declencheur_effet": launch_effect,
@@ -413,7 +438,7 @@ def people(now: datetime | None = None) -> list[dict]:
             "video_phare_traitement": annotate.treatment(notes[top["id"]], names_of[top["id"]]),
             "hors_liste": camp != "international" and key not in known and key.split()[-1] not in known_last,
             "videos_total": round(sum(map(_w, vids))),
-            "videos_recentes": round(sum(map(_w, recent))),
+            "videos_recentes": round(sum(map(w, recent))),
             "acceleration": round(accel, 2),
             "createurs_recents": creators,
             "score": round(accel * np.sqrt(creators), 3),

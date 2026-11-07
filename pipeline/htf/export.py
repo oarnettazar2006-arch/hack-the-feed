@@ -65,6 +65,7 @@ def run() -> dict:
             "citations": (t.get("preuve") or {}).get("citations"),
             "campagne": t.get("campagne", False), "personnalites": t.get("personnalites", []),
             "camps": t.get("camps", {}),
+            "signal_faible": t.get("signal_faible", False), "vu_jusqu_au": t.get("vu_jusqu_au"),
         })
         position_of = {}
         for n, p in enumerate(t.get("positions", [])):
