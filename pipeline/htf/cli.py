@@ -56,6 +56,7 @@ def main() -> None:
     xs.add_argument("--since", default="2026-10-22")
     xs.add_argument("--until", default=None)
     xs.add_argument("--per-query", type=int, default=350)
+    xs.add_argument("--sort", default="Latest", choices=["Latest", "Top"])
     sub.add_parser("x-budget", help="dépense Apify du mois (gratuit)")
     lc = sub.add_parser("local-collect", help="veille locale : vidéos d'une région (Oriane, 2 appels par jour)")
     lc.add_argument("--region", default="Sud-Ouest")
@@ -166,7 +167,7 @@ def main() -> None:
     elif args.cmd == "x-sud-ouest":
         from .sources import x_apify
         until = args.until or datetime.now().date().isoformat()
-        show(x_apify.collect_sud_ouest(args.since, until, args.per_query))
+        show(x_apify.collect_sud_ouest(args.since, until, args.per_query, sort=args.sort))
     elif args.cmd == "x-budget":
         from .sources import x_apify
         show(x_apify.spent())

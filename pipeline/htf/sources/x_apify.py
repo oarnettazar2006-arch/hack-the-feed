@@ -5,8 +5,7 @@ Pourquoi X : (1) Brut y suit déjà ~200 comptes et cherche des comptes de niche
 (Oriane n'indexe pas les comptes de moins de 5 000 abonnés).
 
 Budget : compte Apify gratuit, 5 $ de crédit par mois, PLAFOND DUR 4 $ (APIFY_BUDGET_USD). Chaque lancement
-est bridé par Apify lui-même (maxTotalChargeUsd) et compté ici avant de partir. Scraper : apidojo/tweet-scraper
-(0,40 $ les 1 000 tweets, le plus utilisé de la plateforme).
+est bridé par Apify lui-même (maxTotalChargeUsd) et compté ici avant de partir. Scraper : kaitoeasyapi (voir ACTOR).
 """
 import os
 from datetime import datetime
@@ -15,8 +14,10 @@ import httpx
 
 from .. import config, store
 
-ACTOR = "apidojo~tweet-scraper"
-PRICE_PER_TWEET = 0.0004
+# apidojo/tweet-scraper (0,40 $/1 000) bride les comptes gratuits à 10 tweets par lancement (constaté le 7/11) :
+# on utilise kaitoeasyapi (~0,20 $/1 000 constaté, fonctionne en compte gratuit, mêmes champs de sortie).
+ACTOR = "kaitoeasyapi~twitter-x-data-tweet-scraper-pay-per-result-cheapest"
+PRICE_PER_TWEET = 0.00025  # marge sur le prix constaté (0,02 $ les 100)
 APIFY_BUDGET_USD = 4.0
 API = "https://api.apify.com/v2"
 
@@ -49,7 +50,7 @@ def spent() -> dict:
             "limite du compte ($)": d["limits"]["maxMonthlyUsageUsd"], "plafond de l'équipe ($)": APIFY_BUDGET_USD}
 
 
-def search(terms: list[str], max_items: int, sort: str = "Top") -> list[dict]:
+def search(terms: list[str], max_items: int, sort: str = "Latest") -> list[dict]:
     cost = max_items * PRICE_PER_TWEET
     already = spent()["dépensé chez Apify ($)"]
     if already + cost > APIFY_BUDGET_USD:
@@ -57,7 +58,7 @@ def search(terms: list[str], max_items: int, sort: str = "Top") -> list[dict]:
                            f"(plafond {APIFY_BUDGET_USD} $).")
     r = httpx.post(f"{API}/acts/{ACTOR}/run-sync-get-dataset-items",
                    params={"maxItems": max_items, "maxTotalChargeUsd": round(cost + 0.01, 2), "timeout": 280},
-                   json={"searchTerms": terms, "maxItems": max_items, "sort": sort, "tweetLanguage": "fr"},
+                   json={"searchTerms": terms, "maxItems": max_items, "queryType": sort},
                    headers={"Authorization": f"Bearer {_token()}"}, timeout=320)
     r.raise_for_status()
     return [x for x in r.json() if isinstance(x, dict) and x.get("text")]
@@ -79,13 +80,14 @@ def to_item(t: dict, query: str) -> dict:
     }
 
 
-def collect_sud_ouest(since: str, until: str, per_query: int = 350, min_faves: int = 3) -> dict:
-    """~7 requêtes × per_query tweets (350 → ~2 450 tweets, ~1 $)."""
+def collect_sud_ouest(since: str, until: str, per_query: int = 350, min_faves: int = 3, sort: str = "Latest") -> dict:
+    """~7 requêtes × per_query tweets. « Latest » ramène surtout les derniers jours : pour une période plus
+    ancienne, relancer avec `until` plus tôt et sort="Top" (7/11 : 2e passage 22/10 → 2/11)."""
     terms = [f"{q} lang:fr -filter:replies min_faves:{min_faves} since:{since} until:{until}"
              for q in SUD_OUEST_QUERIES.values()]
     out, saved = {}, 0
     for name, term in zip(SUD_OUEST_QUERIES, terms):
-        tweets = search([term], per_query)
+        tweets = search([term], per_query, sort)
         saved += store.upsert_items([to_item(t, f"x:{name}") for t in tweets if t.get("createdAt")])
         out[name] = len(tweets)
     return {"tweets par bassin": out, "nouveaux": saved, **spent()}
