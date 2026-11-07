@@ -7,6 +7,8 @@ import json
 from datetime import date, timedelta
 
 import matplotlib
+import matplotlib.dates
+import matplotlib.ticker
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
@@ -99,6 +101,11 @@ def exposure_chart() -> str | None:
     ax.set_yscale("log")
     ax.set_xlim(lo, hi)
     ax.set_ylim(lo, hi)
+    ticks = [t for t in (0.5, 1, 2, 5, 10, 20, 50) if lo <= t <= hi]
+    for axis in (ax.xaxis, ax.yaxis):
+        axis.set_major_locator(matplotlib.ticker.FixedLocator(ticks))
+        axis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:g} %".replace(".", ",")))
+        axis.set_minor_formatter(matplotlib.ticker.NullFormatter())
     ax.set_xlabel("part dans les sondages (%, entre ces candidats)")
     ax.set_ylabel("part des vues des vidéos qui les citent (%)")
     ax.set_title("Au-dessus de la diagonale : on en parle plus qu'il ne pèse dans les sondages")
