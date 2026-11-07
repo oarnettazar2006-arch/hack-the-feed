@@ -116,7 +116,11 @@ def evidence(members: list[dict], notes: dict, rates: dict) -> dict | None:
     read = [v for v in members if "legende_suffit" in notes[v["id"]]]
     if not read:
         return None
-    hidden = [v for v in read if not notes[v["id"]]["legende_suffit"]]
+    # Correctif du 7/11 (repéré par Erwan) : quand les paroles sont longues, la légende était coupée avant
+    # d'arriver à Haiku, qui répondait alors « la légende ne suffit pas » sans l'avoir vue. On ne compte donc
+    # que les vidéos dont la légende a bien été lue.
+    judged = [v for v in read if "Légende :" in v["text"]]
+    hidden = [v for v in judged if not notes[v["id"]]["legende_suffit"]]
     quotes, accounts = [], set()
     for v in sorted(read, key=lambda v: -_views(v, rates)):
         n = notes[v["id"]]
@@ -128,11 +132,13 @@ def evidence(members: list[dict], notes: dict, rates: dict) -> dict | None:
         if len(quotes) == 6:
             break
     return {
-        "videos_lues": len(read),
-        "part_hors_legende": round(len(hidden) / len(read), 2),
+        "videos_lues": len(judged),
+        "part_hors_legende": round(len(hidden) / len(judged), 2) if judged else None,
         "canaux": dict(Counter(notes[v["id"]]["canal"] for v in read)),
+        # Réactions : seulement les vidéos dont les commentaires ont bien été lus.
         "reactions": dict(Counter(notes[v["id"]]["reaction_public"] for v in read
-                                  if notes[v["id"]]["reaction_public"] != "sans commentaires")),
+                                  if "Commentaires populaires :" in v["text"]
+                                  and notes[v["id"]]["reaction_public"] != "sans commentaires")),
         "citations": quotes,
     }
 

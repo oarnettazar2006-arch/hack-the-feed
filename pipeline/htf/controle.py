@@ -18,6 +18,21 @@ FIELDS = ["n", "lien", "compte", "plateforme", "date", "paroles_et_texte_a_l_ecr
           "VOTRE_sujet", "VOTRE_ton", "VOTRE_legende_suffit", "VOTRE_personnalites", "VOTRE_remarque"]
 
 
+def sections(text: str) -> dict[str, str]:
+    """Découpe le texte d'une vidéo en parties (« Paroles : », « Légende : »…), quel que soit leur ordre."""
+    import re
+    labels = ("Titre", "Légende", "Paroles", "Texte à l'écran", "Commentaires populaires")
+    out, current = {}, None
+    for line in text.split("\n"):
+        m = re.match(r"^(%s) : ?(.*)$" % "|".join(map(re.escape, labels)), line)
+        if m:
+            current = m.group(1)
+            out[current] = m.group(2)
+        elif current:
+            out[current] += "\n" + line
+    return out
+
+
 def sample(n: int = 30, ironic: int = 8, seed: int = 7) -> dict:
     topics = json.loads((config.OUT_DIR / "topics.json").read_text())
     notes = annotate.notes()
@@ -35,11 +50,9 @@ def sample(n: int = 30, ironic: int = 8, seed: int = 7) -> dict:
     rows, answers = [], {}
     for k, vid in enumerate(chosen, 1):
         it, m, note = items[vid], items[vid]["metrics"], notes[vid]
-        # Texte de la vidéo : « Paroles : … / Texte à l'écran : … / Légende : … / Commentaires populaires : … »
-        text = it["text"].split("Commentaires populaires :", 1)[0]
-        caption = ""
-        if "Légende :" in text:
-            text, caption = text.split("Légende :", 1)
+        sec = sections(it["text"])
+        text = "\n".join(f"{k} : {sec[k]}" for k in ("Paroles", "Texte à l'écran") if sec.get(k))
+        caption = sec.get("Légende", "")
         rows.append({"n": k, "lien": it["url"], "compte": it["account"], "plateforme": m.get("platform"),
                      "date": it["published_at"][:10], "paroles_et_texte_a_l_ecran": text.strip()[:1500],
                      "legende": caption.strip()[:400], "VOTRE_sujet": "", "VOTRE_ton": "",
@@ -68,9 +81,10 @@ def compare(path: str) -> dict:
     from .embed import embed
     answers = json.loads(HAIKU.read_text())
     with open(path, encoding="utf-8-sig") as f:
-        sample_ = f.read(4096)
+        # Séparateur lu sur la ligne d'en-tête seulement (les transcriptions contiennent beaucoup de virgules).
+        header = f.readline()
         f.seek(0)
-        rows = list(csv.DictReader(f, delimiter=";" if sample_.count(";") > sample_.count(",") else ","))
+        rows = list(csv.DictReader(f, delimiter=";" if header.count(";") >= header.count(",") else ","))
     tone_ok = cap_ok = cap_n = 0
     pairs, disagreements, people_ok, people_n = [], [], 0, 0
     by_tone: dict[str, list[int]] = {}

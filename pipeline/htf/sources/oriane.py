@@ -257,12 +257,18 @@ def to_item(r: dict, theme: str | None, weight: float, kind: str = "social", gro
     frames = [[round(f.get("timestampSeconds") or 0, 1), f.get("url"),
                " ".join(t.get("text", "") for t in f["onScreenTextRegions"])]
               for f in (first.get("frames") or []) if f.get("onScreenTextRegions")][:12]
-    parts = [f"Paroles : {transcript}" if transcript else "",
-             f"Texte à l'écran : {on_screen}" if on_screen else "",
-             f"Titre : {r['title']}" if r.get("title") else "",
-             f"Légende : {r.get('caption') or ''}",
-             ("Commentaires populaires : " + " | ".join(comments)) if comments else ""]
-    text = "\n".join(p for p in parts if p)[:MAX_TEXT]
+    # Correctif du 7/11 (repéré par Erwan) : la légende passait après les paroles et était coupée par
+    # MAX_TEXT sur les vidéos longues. Chaque partie a maintenant sa propre limite : rien n'est perdu en entier.
+    tags = " ".join("#" + h.lstrip("#") for h in (r.get("hashtags") or [])[:15])
+    caption = (r.get("caption") or "").strip()
+    if tags and tags.split()[0].lower() not in caption.lower():
+        caption = f"{caption} {tags}".strip()
+    parts = [f"Titre : {r['title'][:200]}" if r.get("title") else "",
+             f"Légende : {caption[:400]}",
+             f"Paroles : {transcript[:900]}" if transcript else "",
+             f"Texte à l'écran : {on_screen[:400]}" if on_screen else "",
+             ("Commentaires populaires : " + " | ".join(comments))[:300] if comments else ""]
+    text = "\n".join(p for p in parts if p)[:MAX_TEXT + 400]
     handle, platform = r.get("profileHandle"), r.get("platform")
     url = None
     if platform == "tiktok" and handle and r.get("platformId"):

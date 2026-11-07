@@ -160,13 +160,17 @@ def test_video_pivot():
 def test_preuve_hors_legende_et_anciennes_annotations():
     from htf import annotate, store
     from htf.analyze import evidence
-    vids = [_video(i, i, views=1000 * (10 - i)) for i in range(4)]
+    vids = [_video(i, i, views=1000 * (10 - i)) for i in range(5)]
+    for v in vids[:4]:
+        v["text"] = "Paroles : …\nLégende : …"
+    vids[4]["text"] = "Paroles : " + "très long " * 200  # légende coupée avant Haiku : ne compte pas
     base = {"sujet": "s", "ton": "critique", "affirmation": "a", "personnalites": []}
     v3 = lambda suffit, canal, cit: {**base, "legende_suffit": suffit, "canal": canal, "citation": cit,
                                      "reaction_public": "rejet"}
     store.save_annotations("v3", {"v0": v3(False, "paroles", "on paie deux fois plus cher"),
                                   "v1": v3(False, "texte à l'écran", "loyer x2 en un an"),
-                                  "v2": v3(True, "légende", "")})
+                                  "v2": v3(True, "légende", ""),
+                                  "v4": v3(False, "paroles", "")})
     store.save_annotations("v2", {"v3": {**base, "personnalites": ["Marie Dupont"]}})  # ancienne annotation
     notes = annotate.notes()
     assert annotate.names(notes["v3"]) == ["Marie Dupont"] and annotate.treatment(notes["v3"], "Marie Dupont") == "critique"
