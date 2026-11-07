@@ -269,6 +269,9 @@ def plan(days: int, per_day: int, themes: list[str] | None = None, media: bool =
     return {"thèmes": len(themes), "jours": days, "vidéos max par thème et par jour": per_day,
             "appels sociaux": social_calls, "appels médias": media_calls,
             "appels au total": social_calls + media_calls,
+            # Mesuré le 7/11 : 20 crédits par recherche avec transcriptions, 10 en projection basic ou profils,
+            # quel que soit le nombre de vidéos renvoyées.
+            "crédits estimés": days * 10 + (social_calls - days) * 20 + (media_calls * 1.5 * 20 if media else 0) + (400 if media else 0),
             "vidéos max récupérées": social_calls * per_day + media_calls * 100}
 
 

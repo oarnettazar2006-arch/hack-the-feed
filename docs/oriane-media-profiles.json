@@ -1,1 +1,493 @@
-{}
+{
+ "Brut": {
+  "groupe": "brut",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_71af041f5c0405bc141005d27614",
+    "compte": "brutofficiel",
+    "nom": "Brut.",
+    "abonnés": 24873665,
+    "vérifié": true,
+    "autres candidats": [
+     "brutacocina (6500000)",
+     "brutamerica (6000000)"
+    ]
+   },
+   {
+    "plateforme": "instagram",
+    "id": "prf_1992e0f8400e6acb4ce976d8f4d8",
+    "compte": "brutofficiel",
+    "nom": "Brut.",
+    "abonnés": 5718901,
+    "vérifié": true,
+    "autres candidats": [
+     "brut.india (4397117)",
+     "tiaobrutosistematico (3522079)"
+    ]
+   }
+  ]
+ },
+ "HugoDécrypte": {
+  "groupe": "concurrent",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_a0e1247fac7871db0fe74faa7b53",
+    "compte": "hugodecrypte",
+    "nom": "hugodecrypte",
+    "abonnés": 8310528,
+    "vérifié": true,
+    "autres candidats": [
+     "hugodecrypte.quebec (153800)"
+    ]
+   },
+   {
+    "plateforme": "instagram",
+    "id": "prf_d50ba211bc7a23e24f2599f55db0",
+    "compte": "hugodecrypte",
+    "nom": "HugoDécrypte",
+    "abonnés": 5844115,
+    "vérifié": true,
+    "autres candidats": [
+     "hugodecrypte.pop (1220974)",
+     "hugodecrypte.sport (678812)"
+    ]
+   }
+  ]
+ },
+ "Konbini": {
+  "groupe": "concurrent",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_4fc10b19551e3959e9eaea12ce32",
+    "compte": "konbini",
+    "nom": "Konbini",
+    "abonnés": 3840496,
+    "vérifié": true,
+    "autres candidats": [
+     "konbiniconfessions (144467)",
+     "konbini.boy (33000)"
+    ]
+   },
+   {
+    "plateforme": "instagram",
+    "id": "prf_14c2b1d2d1478dc9fdc36207aee1",
+    "compte": "konbini",
+    "nom": "Konbini",
+    "abonnés": 3466082,
+    "vérifié": true,
+    "autres candidats": [
+     "konbiniconfessions (398390)",
+     "konbinishop.cl (219692)"
+    ]
+   }
+  ]
+ },
+ "Loopsider": {
+  "groupe": "concurrent",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_fe594ee847908fbfb9144d05f624",
+    "compte": "loopsider",
+    "nom": "Loopsider",
+    "abonnés": 1400000,
+    "vérifié": true,
+    "autres candidats": []
+   },
+   {
+    "plateforme": "instagram",
+    "id": "prf_749697e6fa0ba2f27824bcd39f2b",
+    "compte": "loopsider",
+    "nom": "Loopsider",
+    "abonnés": 748002,
+    "vérifié": true,
+    "autres candidats": []
+   }
+  ]
+ },
+ "Blast": {
+  "groupe": "concurrent",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_f7935519892ee71fcb8369c383ab",
+    "compte": "blasterjaxx_official",
+    "nom": "Blasterjaxx",
+    "abonnés": 1127248,
+    "vérifié": true,
+    "autres candidats": [
+     "hornblasters (924984)",
+     "gelblasterenmx (783100)"
+    ],
+    "exclu": true
+   },
+   {
+    "plateforme": "instagram",
+    "id": "prf_7005179e421d9c2a3cab8e2ca7c4",
+    "compte": "keralablasters",
+    "nom": "Kerala Blasters FC",
+    "abonnés": 3866351,
+    "vérifié": true,
+    "autres candidats": [
+     "blasterjaxx (1423090)",
+     "hornblasters (1043629)"
+    ],
+    "exclu": true
+   }
+  ]
+ },
+ "Le Crayon": {
+  "groupe": "concurrent",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_4e94d5826f250c664a947c289d98",
+    "compte": "lecrayonmedia",
+    "nom": "Le Crayon ✏️",
+    "abonnés": 452041,
+    "vérifié": false,
+    "autres candidats": []
+   },
+   {
+    "plateforme": "instagram",
+    "id": "prf_c621003f42b93d98460d84d913e6",
+    "compte": "lecrayonmedia",
+    "nom": "Le Crayon✏️",
+    "abonnés": 425131,
+    "vérifié": true,
+    "autres candidats": [
+     "6crayonstyle (9906)"
+    ]
+   }
+  ]
+ },
+ "Vert": {
+  "groupe": "concurrent",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_7424093c4c9bcd436d471d84fd50",
+    "compte": "vert_le_media",
+    "nom": "Vert, le média 💚",
+    "abonnés": 21200,
+    "vérifié": false,
+    "autres candidats": []
+   },
+   {
+    "plateforme": "instagram",
+    "id": "prf_66c58da143b003b67ac4f2651fad",
+    "compte": "vosges_media",
+    "nom": "Vosges Média 🌲Découvertes locales, rando, restau, activités…",
+    "abonnés": 19850,
+    "vérifié": false,
+    "autres candidats": [],
+    "exclu": true
+   }
+  ]
+ },
+ "Le Monde": {
+  "groupe": "traditionnel",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_bbbfd4fda92575a1ed5ed076d1b0",
+    "compte": "lemondefr",
+    "nom": "Le Monde",
+    "abonnés": 2200000,
+    "vérifié": true,
+    "autres candidats": [
+     "lemondealenversvideo (1800000)",
+     "advicez7 (469800)"
+    ]
+   },
+   {
+    "plateforme": "instagram",
+    "id": "prf_1c549d5ac1984c4c27bddb3848b7",
+    "compte": "lemondefr",
+    "nom": "Le Monde",
+    "abonnés": 2700000,
+    "vérifié": true,
+    "autres candidats": [
+     "les_splendeursdumonde (717899)",
+     "miraworld16 (548191)"
+    ]
+   }
+  ]
+ },
+ "franceinfo": {
+  "groupe": "traditionnel",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_f31fa1bf390d86056af1cf3feda0",
+    "compte": "franceinfo",
+    "nom": "Franceinfo",
+    "abonnés": 2600000,
+    "vérifié": true,
+    "autres candidats": [
+     "actu.infos.fr (50200)",
+     "actufranceinfo.fr (23100)"
+    ]
+   },
+   {
+    "plateforme": "instagram",
+    "id": "prf_da6848a95147a991897709b43265",
+    "compte": "franceinfo",
+    "nom": "franceinfo",
+    "abonnés": 1322784,
+    "vérifié": true,
+    "autres candidats": [
+     "sportfranceinfo (0)"
+    ]
+   }
+  ]
+ },
+ "20 Minutes": {
+  "groupe": "traditionnel",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_60f244b30a70cc179c3e8e1c23e1",
+    "compte": "20minutesonline",
+    "nom": "20 minutes online",
+    "abonnés": 474200,
+    "vérifié": true,
+    "autres candidats": [
+     "20minutesfrance (421600)"
+    ]
+   }
+  ]
+ },
+ "BFMTV": {
+  "groupe": "traditionnel",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_677db2f8ff76454941439eeb7aff",
+    "compte": "bfmtv",
+    "nom": "BFMTV",
+    "abonnés": 5422473,
+    "vérifié": true,
+    "autres candidats": []
+   },
+   {
+    "plateforme": "instagram",
+    "id": "prf_a250c760d12d02df451f125001d5",
+    "compte": "bfmtv",
+    "nom": "BFM",
+    "abonnés": 1072680,
+    "vérifié": true,
+    "autres candidats": [
+     "bfmtv_inside (7048)"
+    ]
+   }
+  ]
+ },
+ "Le Parisien": {
+  "groupe": "traditionnel",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_04080720da8d7eca631a5142f020",
+    "compte": "leparisien",
+    "nom": "Le Parisien",
+    "abonnés": 3700000,
+    "vérifié": true,
+    "autres candidats": [
+     "chakadembele07 (341700)",
+     "leptiparisien (35100)"
+    ]
+   },
+   {
+    "plateforme": "instagram",
+    "id": "prf_5e11206a55ca3bcbec5f209bfedf",
+    "compte": "leparisien",
+    "nom": "Le Parisien",
+    "abonnés": 1531317,
+    "vérifié": true,
+    "autres candidats": [
+     "laparisiennestylee (750265)",
+     "lesparisiennesdumonde (433406)"
+    ]
+   }
+  ]
+ },
+ "Ouest-France": {
+  "groupe": "traditionnel",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_29553b9b41908f1bdf2a6fb24eb0",
+    "compte": "ouestfrance",
+    "nom": "ouestfrance",
+    "abonnés": 417600,
+    "vérifié": true,
+    "autres candidats": []
+   },
+   {
+    "plateforme": "instagram",
+    "id": "prf_49d7b147536ecf1239544b7c1850",
+    "compte": "ouestfrance",
+    "nom": "Ouest-France",
+    "abonnés": 372693,
+    "vérifié": true,
+    "autres candidats": [
+     "ouestfrance.bretagne (61536)",
+     "ouestfrance.nantes (45723)"
+    ]
+   }
+  ]
+ },
+ "Le Figaro": {
+  "groupe": "droite",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_62949a44d3f621301454badd2f12",
+    "compte": "lefigaro",
+    "nom": "Le Figaro",
+    "abonnés": 975843,
+    "vérifié": true,
+    "autres candidats": [
+     "figaroetudiant (52700)",
+     "lepinkfigaro (21400)"
+    ]
+   },
+   {
+    "plateforme": "instagram",
+    "id": "prf_2feceaccbaaf6af3baf275465d09",
+    "compte": "lefigaro",
+    "nom": "Le Figaro",
+    "abonnés": 1097332,
+    "vérifié": true,
+    "autres candidats": [
+     "lepinkfigaro (181087)",
+     "figaroetudiant (122708)"
+    ]
+   }
+  ]
+ },
+ "CNews": {
+  "groupe": "droite",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_b3791d70d9e9a69912db5f5d21d8",
+    "compte": "bbcnews",
+    "nom": "BBC News",
+    "abonnés": 16300000,
+    "vérifié": true,
+    "autres candidats": [
+     "abcnews (16000000)",
+     "nbcnews (12696697)"
+    ],
+    "exclu": true
+   },
+   {
+    "plateforme": "instagram",
+    "id": "prf_0d537fe103701aff5039190f78cb",
+    "compte": "bbcnews",
+    "nom": "BBC News",
+    "abonnés": 30848202,
+    "vérifié": true,
+    "autres candidats": [
+     "abcnews (5795958)",
+     "nbcnews (4757493)"
+    ],
+    "exclu": true
+   }
+  ]
+ },
+ "Frontières": {
+  "groupe": "droite",
+  "comptes": [
+   {
+    "plateforme": "instagram",
+    "id": "prf_ebe6118a503c80ec3c1ef1f0237f",
+    "compte": "frontieresmedia",
+    "nom": "Frontières Média",
+    "abonnés": 238975,
+    "vérifié": false,
+    "autres candidats": []
+   }
+  ]
+ },
+ "Libération": {
+  "groupe": "gauche",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_09dcc376503b58432a42a5da2682",
+    "compte": "269.liberation_animale",
+    "nom": "269 Libération Animale",
+    "abonnés": 10100,
+    "vérifié": false,
+    "autres candidats": [],
+    "exclu": true
+   },
+   {
+    "plateforme": "instagram",
+    "id": "prf_726de19d10c0a29bbe2ab1bd3999",
+    "compte": "liberationfr",
+    "nom": "Libération",
+    "abonnés": 740165,
+    "vérifié": true,
+    "autres candidats": [
+     "liberationfilmsasbl (5490)",
+     "ondine.align (3470)"
+    ]
+   }
+  ]
+ },
+ "Mediapart": {
+  "groupe": "gauche",
+  "comptes": [
+   {
+    "plateforme": "instagram",
+    "id": "prf_0140379280b6f336b8ab0306e86f",
+    "compte": "mediapart",
+    "nom": "Mediapart",
+    "abonnés": 1792616,
+    "vérifié": false,
+    "autres candidats": [
+     "infomediapartner.id (5966)",
+     "mediapartnership (717)"
+    ]
+   }
+  ]
+ },
+ "Le Média": {
+  "groupe": "gauche",
+  "comptes": [
+   {
+    "plateforme": "tiktok",
+    "id": "prf_59ab0f2ae6eb016a85fd7e024813",
+    "compte": "lemediapositif",
+    "nom": "Le Média Positif 🍀",
+    "abonnés": 2200000,
+    "vérifié": true,
+    "autres candidats": [
+     "le.media.food (220600)",
+     "bestielemedia (47400)"
+    ],
+    "exclu": true
+   },
+   {
+    "plateforme": "instagram",
+    "id": "prf_ca1cd3dece80a44d18b0cbe9fbc9",
+    "compte": "le.media.positif",
+    "nom": "Le Média Positif 🍀",
+    "abonnés": 1936618,
+    "vérifié": true,
+    "autres candidats": [
+     "le.media.experience (882380)",
+     "le.media.food (566594)"
+    ],
+    "exclu": true
+   }
+  ]
+ }
+}
