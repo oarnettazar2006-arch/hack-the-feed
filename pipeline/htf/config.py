@@ -44,7 +44,7 @@ WINDOW_BASELINE = 14
 CLUSTER_DISTANCE = 0.50      # distance cosinus max entre sujets d'un même groupe
 MIN_VIDEOS = 8               # en dessous, un sujet n'est pas classé
 MIN_CREATORS = 4
-COVERAGE_SIMILARITY = 0.66   # calibré le 3/11 : >0,68 même histoire, 0,60-0,68 même grand sujet
+COVERAGE_SIMILARITY = 0.75   # 7/11, vraies données (15 000 articles) : à 0,66, 73 sujets sur 75 « couverts » dont des faux ; 0,75 garde les vraies reprises
 TOP_TOPICS_SHOWCASE = 20     # sujets résumés par Opus
 
 THEMES = [

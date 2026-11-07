@@ -184,6 +184,10 @@ def coverage_known_since(medias: list[dict]) -> dict:
     return known
 
 
+STATE_ORDER = {"à traiter maintenant": 0, "course de vitesse": 1, "à surveiller": 2, "déjà repéré": 3,
+               "en hausse": 3, "angle mort durable": 4, "stable": 5, "en baisse": 6}
+
+
 def _state(accel: float, recent: int, total: int, covered: bool, coverage_complete: bool = True) -> str:
     if accel >= 2.5 and recent >= config.MIN_VIDEOS:
         state = "en forte hausse"
@@ -292,7 +296,8 @@ def run(now: datetime | None = None) -> list[dict]:
                 "surperformance_mediane": round(overperf, 2),
                 "engagement": round(engagement, 3),
             },
-            "score": accel * np.sqrt(creators_recent) * max(overperf, 0.01),
+            # Surperformance plafonnée à ×3 : un seul compte viral ne doit pas dominer le classement (constaté le 7/11).
+            "score": accel * np.sqrt(creators_recent) * min(max(overperf, 0.01), 3.0),
             "tons": dict(tones),
             "couverture": coverage,
             "couvert": covered,
@@ -311,7 +316,8 @@ def run(now: datetime | None = None) -> list[dict]:
                              for v in members][:60],
         })
 
-    topics.sort(key=lambda t: -t["score"])
+    # L'état passe d'abord : un sujet qui monte est toujours devant un sujet stable ou en baisse.
+    topics.sort(key=lambda t: (STATE_ORDER.get(t["etat"], 5), -t["score"]))
     for rank, t in enumerate(topics, 1):
         t["rang"] = rank
         t["score"] = round(float(t["score"]), 3)
