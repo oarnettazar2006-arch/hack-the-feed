@@ -75,11 +75,20 @@ def _yes(v: str) -> bool | None:
     return True if v in ("oui", "o", "yes", "vrai", "1") else False if v in ("non", "n", "no", "faux", "0") else None
 
 
-def compare(path: str) -> dict:
+def compare(path: str, current: bool = True) -> dict:
+    """current=True : compare aux annotations ACTUELLES de Haiku (celles qu'utilise l'outil, après la correction
+    des légendes du 7/11) ; False : aux réponses gardées au moment du tirage."""
     import numpy as np
     from .analyze import _name_key
     from .embed import embed
     answers = json.loads(HAIKU.read_text())
+    if current:
+        now = annotate.notes()
+        for a in answers.values():
+            n = now.get(a["id"])
+            if n:
+                a.update({"sujet": n["sujet"], "ton": n["ton"], "legende_suffit": n.get("legende_suffit"),
+                          "personnalites": annotate.names(n)})
     with open(path, encoding="utf-8-sig") as f:
         # Séparateur lu sur la ligne d'en-tête seulement (les transcriptions contiennent beaucoup de virgules).
         header = f.readline()
@@ -120,5 +129,6 @@ def compare(path: str) -> dict:
            "accord « légende suffit »": f"{cap_ok}/{cap_n}",
            "même sujet (similarité ≥ 0,75)": f"{sum(s >= 0.75 for s in sims)}/{len(sims)}" if sims else None,
            "mêmes personnalités": f"{people_ok}/{people_n}", "désaccords sur le ton": disagreements}
-    (config.OUT_DIR / "controle-resultat.json").write_text(json.dumps(out, ensure_ascii=False, indent=1))
+    out["comparé à"] = "annotations actuelles" if current else "réponses au moment du tirage"
+    (config.OUT_DIR / ("controle-resultat.json" if current else "controle-resultat-tirage.json")).write_text(json.dumps(out, ensure_ascii=False, indent=1))
     return out
