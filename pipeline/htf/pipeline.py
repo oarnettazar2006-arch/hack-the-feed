@@ -96,6 +96,7 @@ def run(run_id: str, days: int, per_day: int, top: int, collect: bool, ask) -> d
     step("collecte presse et YouTube", media.collect)
     step("annotation des vidéos (Haiku)", lambda: annotate.annotate_social(run_id))
     step("annotation des médias (Haiku)", lambda: annotate.annotate_media(run_id))
+    step("annotation des tweets X (Haiku)", lambda: annotate.annotate_x(run_id))
 
     def do_analyze():
         topics = analyze.run()

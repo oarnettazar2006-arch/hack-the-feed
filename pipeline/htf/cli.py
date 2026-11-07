@@ -52,6 +52,11 @@ def main() -> None:
     bt.add_argument("press_day", help="date du premier article, AAAA-MM-JJ")
     sub.add_parser("purge-fake", help="supprimer les fausses vidéos de test")
     sub.add_parser("cost", help="dépenses enregistrées")
+    xs = sub.add_parser("x-sud-ouest", help="tweets du Sud-Ouest via Apify (payant, plafond 4 $)")
+    xs.add_argument("--since", default="2026-10-22")
+    xs.add_argument("--until", default=None)
+    xs.add_argument("--per-query", type=int, default=350)
+    sub.add_parser("x-budget", help="dépense Apify du mois (gratuit)")
     lc = sub.add_parser("local-collect", help="veille locale : vidéos d'une région (Oriane, 2 appels par jour)")
     lc.add_argument("--region", default="Sud-Ouest")
     lc.add_argument("--days", type=int, default=17)
@@ -158,6 +163,13 @@ def main() -> None:
     elif args.cmd == "local-collect":
         from . import local
         show(local.collect(args.region, args.days))
+    elif args.cmd == "x-sud-ouest":
+        from .sources import x_apify
+        until = args.until or datetime.now().date().isoformat()
+        show(x_apify.collect_sud_ouest(args.since, until, args.per_query))
+    elif args.cmd == "x-budget":
+        from .sources import x_apify
+        show(x_apify.spent())
     elif args.cmd == "cost":
         show({"total ($)": round(store.spent(), 4), "détail": store.cost_report()})
 

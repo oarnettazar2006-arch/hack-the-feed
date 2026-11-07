@@ -185,5 +185,10 @@ def annotate_social(run_id: str, limit: int | None = None) -> dict:
     return _annotate("social", run_id, limit, batch_size=12)
 
 
+def annotate_x(run_id: str, limit: int | None = None) -> dict:
+    """Tweets : même consigne que les médias (phrase de sujet neutre), pour les comparer aux sujets."""
+    return _annotate("x", run_id, limit, batch_size=40)
+
+
 def annotate_media(run_id: str, limit: int | None = None) -> dict:
     return _annotate("media", run_id, limit, batch_size=20)

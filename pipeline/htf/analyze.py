@@ -252,6 +252,9 @@ def run(now: datetime | None = None) -> list[dict]:
     labels = _cluster(vectors)
     media_vectors = embed([notes[m["id"]]["sujet"] for m in medias]) if medias else np.zeros((0, vectors.shape[1]))
     known_since = coverage_known_since(medias)
+    # X (Apify) : tweets lus comme les médias, rapprochés des sujets au même seuil que la presse.
+    tweets = [x for x in store.load_items("x") if x["id"] in notes]
+    x_vectors = embed([notes[x["id"]]["sujet"] for x in tweets]) if tweets else np.zeros((0, vectors.shape[1]))
 
     topics = []
     for label in sorted(set(labels)):
@@ -291,6 +294,21 @@ def run(now: datetime | None = None) -> list[dict]:
             for i in order if sims[i] >= config.COVERAGE_SIMILARITY
         ]
         covered = bool(coverage)
+        x_sims = x_vectors @ centroid if len(x_vectors) else np.array([])
+        x_hits = sorted((tweets[i] for i in np.where(x_sims >= config.COVERAGE_SIMILARITY)[0]),
+                        key=lambda x: x["published_at"]) if len(x_sims) else []
+        first_video = min(v["published_at"] for v in members)
+        x_info = {
+            "x_tweets": len(x_hits),
+            "x_premier": x_hits[0]["published_at"] if x_hits else None,
+            # X avant TikTok/Instagram : le sujet circulait déjà sur X avant la première vidéo lue.
+            "x_avant_videos": bool(x_hits) and x_hits[0]["published_at"] < first_video,
+            "x_exemples": [{"compte": x["metrics"].get("handle"), "abonnes": x["metrics"].get("followers"),
+                            "date": x["published_at"], "texte": x["text"][:280], "url": x["url"],
+                            "likes": x["metrics"].get("likes")}
+                           for x in sorted(x_hits, key=lambda x: -(x["metrics"].get("likes") or 0))[:5]],
+            "x_ids": [x["id"] for x in x_hits][:200],
+        }
         base_day = base_start.date().isoformat()
         coverage_complete = all(d is not None and d <= base_day for d in known_since.values())
 
@@ -355,6 +373,7 @@ def run(now: datetime | None = None) -> list[dict]:
             "etat": ("déjà repéré" if covered else "signal faible") if weak
                     else _state(accel, len(recent), len(members), covered, coverage_complete),
             "signal_faible": weak,
+            **x_info,
             # Veille locale : régions des vidéos, région où le sujet est né, et schéma « local → national ».
             "regions": geo["regions"], "foyer": geo["foyer"], "local_vers_national": geo["local_vers_national"],
             "vu_jusqu_au": (fresh_end if weak else now).date().isoformat(),

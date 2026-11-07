@@ -68,6 +68,8 @@ def run() -> dict:
             "signal_faible": t.get("signal_faible", False), "vu_jusqu_au": t.get("vu_jusqu_au"),
             "videos_decollage": t.get("videos_decollage", 0),
             "regions": t.get("regions") or {}, "foyer": t.get("foyer"),
+            "x_tweets": t.get("x_tweets", 0), "x_premier": t.get("x_premier"),
+            "x_avant_videos": bool(t.get("x_avant_videos")), "x_exemples": t.get("x_exemples") or [],
             "local_vers_national": bool(t.get("local_vers_national")),
         })
         position_of = {}

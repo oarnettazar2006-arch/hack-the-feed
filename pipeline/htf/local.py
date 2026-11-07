@@ -181,8 +181,10 @@ def scouts(topics: list[dict], min_followers: int = 5000, max_followers: int = 1
     items = {i["id"]: i for i in store.load_items("social")}
     local_media = {m for r in REGIONS.values() for m in r["medias"]}
     stats: dict[str, dict] = defaultdict(lambda: {"sujets": [], "avances": [], "videos": []})
+    items.update({x["id"]: x for x in store.load_items("x")})
     for t in topics:
-        vids = sorted((items[v] for v in t["videos"] if v in items), key=lambda v: v["published_at"])
+        # Vidéos du sujet et tweets rapprochés (X n'a pas de seuil d'abonnés : on y trouve les plus petits comptes).
+        vids = sorted((items[v] for v in t["videos"] + t.get("x_ids", []) if v in items), key=lambda v: v["published_at"])
         if len(vids) < 8:
             continue
         times = [datetime.fromisoformat(v["published_at"].replace("Z", "+00:00")) for v in vids]
@@ -190,8 +192,9 @@ def scouts(topics: list[dict], min_followers: int = 5000, max_followers: int = 1
         for v, ts in zip(vids[: max(2, len(vids) // 4)], times):
             m = v["metrics"]
             handle = (m.get("handle") or "").lower()
-            if (not min_followers <= (m.get("followers") or 0) <= max_followers or handle in NATIONAL_MEDIA
-                    or handle in local_media or v["source"] != "oriane"):
+            low = 500 if v["source"] == "x" else min_followers
+            if (not low <= (m.get("followers") or 0) <= max_followers or handle in NATIONAL_MEDIA
+                    or handle in local_media or v["source"] not in ("oriane", "x")):
                 continue
             s = stats[v["account"]]
             if t["id"] in [x["id"] for x in s["sujets"]]:
@@ -208,15 +211,18 @@ def scouts(topics: list[dict], min_followers: int = 5000, max_followers: int = 1
         handle, platform = m.get("handle"), m.get("platform")
         out.append({
             "compte": handle or account, "plateforme": platform, "abonnes": m.get("followers"),
-            "url": f"https://www.tiktok.com/@{handle}" if platform == "tiktok" else f"https://www.instagram.com/{handle}/",
+            "url": {"tiktok": f"https://www.tiktok.com/@{handle}", "x": f"https://x.com/{handle}"}.get(
+                platform, f"https://www.instagram.com/{handle}/"),
             "region": regions.most_common(1)[0][0] if regions else None,
             "nb_sujets": len(s["sujets"]), "avance_moyenne_jours": round(sum(s["avances"]) / len(s["avances"]), 1),
             "sujets": [x["titre"] for x in s["sujets"]][:5],
             "exemple_url": v0["url"],
         })
     # Type de compte depuis la bio (les élus et les médias sont des sources différentes des créateurs).
+    x_bios = {f"x:{x['metrics'].get('handle')}": x["metrics"].get("bio") or "" for x in store.load_items("x")}
     try:
-        bios = fetch_bios([(a["plateforme"], a["compte"]) for a in out if a["plateforme"] and a["compte"]])
+        bios = fetch_bios([(a["plateforme"], a["compte"]) for a in out
+                           if a["plateforme"] and a["compte"] and a["plateforme"] != "x"]) | x_bios
     except Exception:
         bios = store.cache_get("local:bios") or {}
     local_media = {m for r in REGIONS.values() for m in r["medias"]}
