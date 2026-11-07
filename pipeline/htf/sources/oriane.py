@@ -8,6 +8,7 @@ Les appels consomment des crédits Oriane : `plan()` affiche le nombre d'appels 
 """
 import csv
 import os
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -275,10 +276,11 @@ def to_item(r: dict, theme: str | None, weight: float, kind: str = "social", gro
         url = f"https://www.tiktok.com/@{handle}/video/{r['platformId']}"
     elif platform == "youtube" and r.get("platformId"):
         url = f"https://www.youtube.com/watch?v={r['platformId']}"
-    elif platform == "instagram" and handle:
-        # Oriane ne donne pas le code court du post Instagram (seulement un identifiant numérique) :
-        # lien de repli vers le compte, signalé par `lien_compte` pour que l'interface l'écrive.
-        url = f"https://www.instagram.com/{handle}/"
+    elif platform == "instagram":
+        # Le code court du post Instagram n'est pas un champ de l'API, mais il figure dans l'adresse des images
+        # analysées (…/oriane-frames/instagram/<code>/…) : lien direct quand on le trouve, sinon lien vers le compte.
+        code = next((m.group(1) for f in frames for m in [re.search(r"/instagram/([A-Za-z0-9_-]{6,})/", f[1] or "")] if m), None)
+        url = f"https://www.instagram.com/p/{code}/" if code else (f"https://www.instagram.com/{handle}/" if handle else None)
     return {
         "id": f"oriane:{r['id']}",
         "kind": kind,
@@ -299,7 +301,7 @@ def to_item(r: dict, theme: str | None, weight: float, kind: str = "social", gro
             # Géographie (veille locale) : lieu tagué, lieu du profil, bio du créateur.
             "location": r.get("locationCompleteAddress"), "profile_location": r.get("profileLocationCompleteAddress"),
             "bio": (r.get("profileBio") or "")[:300],
-            "lien_compte": platform == "instagram",
+            "lien_compte": platform == "instagram" and "/p/" not in (url or ""),
         },
     }
 
