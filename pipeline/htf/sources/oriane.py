@@ -166,6 +166,12 @@ class Oriane:
                 continue
             if r.status_code == 402:
                 with self.lock:
+                    if key == self.key and self.key_index + 1 >= len(self.keys):
+                        # Clés ajoutées dans .env pendant la collecte : on les relit avant d'abandonner.
+                        from dotenv import dotenv_values
+                        extra = [k.strip() for k in (dotenv_values(config.ROOT / ".env").get("ORIANE_API_KEYS") or "").split(",")
+                                 if k.strip() and k.strip() not in self.keys]
+                        self.keys += extra
                     if key == self.key and self.key_index + 1 < len(self.keys):
                         self.key_index += 1
                         self.key = self.keys[self.key_index]
