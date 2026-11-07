@@ -438,7 +438,7 @@ def people(now: datetime | None = None) -> list[dict]:
             "video_phare_traitement": annotate.treatment(notes[top["id"]], names_of[top["id"]]),
             "hors_liste": camp != "international" and key not in known and key.split()[-1] not in known_last,
             "videos_total": round(sum(map(_w, vids))),
-            "videos_recentes": round(sum(map(w, recent))),
+            "videos_recentes": round(sum(map(_w, recent))),
             "acceleration": round(accel, 2),
             "createurs_recents": creators,
             "score": round(accel * np.sqrt(creators), 3),
