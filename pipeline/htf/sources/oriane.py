@@ -406,18 +406,36 @@ def people_volumes(names: list[str], end: date, recent_days: int, base_days: int
         _, n_b, a_b = api.search_meta({**base, "publishedAt": {"after": b_start.isoformat(),
                                                                  "before": (r_start - timedelta(days=1)).isoformat()}},
                                       q, limit=1, projection="basic")
-        return name, {"videos_recentes": n_r, "vues_recentes": a_r.get("totalViewsCount"),
-                      "interactions_recentes": a_r.get("totalInteractionsCount"),
-                      "videos_reference": n_b, "vues_reference": a_b.get("totalViewsCount"),
+        return name, {"videos_recentes": n_r, "vues_recentes": a_r.get("totalViewsCount") or 0,
+                      "interactions_recentes": a_r.get("totalInteractionsCount") or 0,
+                      "videos_reference": n_b, "vues_reference": a_b.get("totalViewsCount") or 0,
                       "periode": f"{r_start} → {end} (référence {b_start} → {r_start - timedelta(days=1)})"}
 
     try:
         with ThreadPoolExecutor(max_workers=config.ORIANE_WORKERS) as pool:
             out = dict(pool.map(one, names))
+        store.cache_set("oriane:people_volumes", out)
+        people_volume_totals(end, recent_days, base_days)
     except OrianeCreditsExhausted as e:
         return {"arrêt": str(e)}
-    store.cache_set("oriane:people_volumes", out)
     return {"personnalités": len(out), "appels": api.calls}
+
+
+def people_volume_totals(end: date, recent_days: int, base_days: int) -> dict:
+    """Total des vidéos FR indexées sur les deux mêmes périodes (2 appels basic) : sert à corriger
+    l'accélération du retard d'indexation (la période récente est toujours moins remplie)."""
+    api = Oriane()
+    base = {"platform": {"includes": ["tiktok", "instagram"]}, "format": {"includes": ["video"]}}
+    r_start = end - timedelta(days=recent_days - 1)
+    b_start = r_start - timedelta(days=base_days)
+    _, n_r = api.search({**base, "publishedAt": {"after": r_start.isoformat(), "before": end.isoformat()}},
+                        [FRENCH], limit=1, projection="basic")
+    _, n_b = api.search({**base, "publishedAt": {"after": b_start.isoformat(),
+                                                  "before": (r_start - timedelta(days=1)).isoformat()}},
+                        [FRENCH], limit=1, projection="basic")
+    totals = {"videos_fr_recentes": n_r, "videos_fr_reference": n_b}
+    store.cache_set("oriane:people_volume_totals", totals)
+    return totals
 
 
 PROFILES_FILE = config.ROOT / "docs" / "oriane-media-profiles.json"

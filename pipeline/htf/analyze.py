@@ -467,11 +467,14 @@ def people(now: datetime | None = None) -> list[dict]:
     out = polls.overexposure(out, now.date())
     # Volumes réels (agrégations Oriane sur tout l'index, commande `oriane-volumes`), si mesurés.
     volumes = store.cache_get("oriane:people_volumes") or {}
+    totals = store.cache_get("oriane:people_volume_totals") or {}
     for p in out:
         p["historique_videos"] = store.cache_get(f"polls:history:{p['nom']}")
         v = volumes.get(p["nom"])
         p["volume_reel"] = v
-        if v:
-            p["acceleration_reelle"] = round((v["videos_recentes"] / config.WINDOW_RECENT + 1) /
-                                             (v["videos_reference"] / config.WINDOW_BASELINE + 1), 2)
+        if v and totals.get("videos_fr_recentes") and totals.get("videos_fr_reference"):
+            # Part des vidéos FR qui la citent, récente contre référence : corrige le retard d'indexation
+            # (la période récente est toujours moins remplie). +1 vidéo de lissage pour les petits nombres.
+            p["acceleration_reelle"] = round(((v["videos_recentes"] + 1) / totals["videos_fr_recentes"]) /
+                                             ((v["videos_reference"] + 1) / totals["videos_fr_reference"]), 2)
     return out
