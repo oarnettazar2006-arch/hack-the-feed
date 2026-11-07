@@ -52,6 +52,12 @@ def main() -> None:
     bt.add_argument("press_day", help="date du premier article, AAAA-MM-JJ")
     sub.add_parser("purge-fake", help="supprimer les fausses vidéos de test")
     sub.add_parser("cost", help="dépenses enregistrées")
+    sub.add_parser("polls", help="sondages présidentielle 2027 depuis Wikipédia (gratuit)")
+    hi = sub.add_parser("polls-history", help="vidéos par jour citant une personnalité (Oriane, 10 crédits par jour)")
+    hi.add_argument("nom")
+    hi.add_argument("termes", nargs="+")
+    hi.add_argument("--debut", default="2026-09-01")
+    hi.add_argument("--fin", default=None)
     args = p.parse_args()
 
     run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -112,6 +118,15 @@ def main() -> None:
         show(backtest.measure(run_id, args.story, args.press_day))
     elif args.cmd == "purge-fake":
         show({"fausses vidéos supprimées": store.purge_fake()})
+    elif args.cmd == "polls":
+        from . import polls
+        show(polls.collect())
+    elif args.cmd == "polls-history":
+        from datetime import date as _date
+        from . import analyze as _an, polls
+        end = _date.fromisoformat(args.fin) if args.fin else (_an._last_complete_day() or datetime.now()).date()
+        h = polls.oriane_history(args.nom, args.termes, _date.fromisoformat(args.debut), end)
+        show({"jours": len(h), "vidéos": sum(x["videos"] for x in h)})
     elif args.cmd == "cost":
         show({"total ($)": round(store.spent(), 4), "détail": store.cost_report()})
 

@@ -433,4 +433,9 @@ def people(now: datetime | None = None) -> list[dict]:
     for p in out:
         p["part_de_voix"] = round(p["vues"] / total, 3) if p["camp"] not in (None, "international") else None
     out.sort(key=lambda p: (-p["score"]))
+    # Sondages (Wikipédia, commande `polls`) : score moyen, surexposition, et courbe longue des vidéos si mesurée.
+    from . import polls
+    out = polls.overexposure(out, now.date())
+    for p in out:
+        p["historique_videos"] = store.cache_get(f"polls:history:{p['nom']}")
     return out

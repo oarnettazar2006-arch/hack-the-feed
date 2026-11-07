@@ -6,3 +6,5 @@ pydantic==2.14.2
 pytest==9.2.0
 python-dotenv==1.2.4
 scikit-learn==1.9.1
+beautifulsoup4==4.13.4
+lxml==6.0.0
