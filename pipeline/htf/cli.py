@@ -52,7 +52,9 @@ def main() -> None:
     bt.add_argument("press_day", help="date du premier article, AAAA-MM-JJ")
     sub.add_parser("purge-fake", help="supprimer les fausses vidéos de test")
     sub.add_parser("cost", help="dépenses enregistrées")
-    sub.add_parser("polls", help="sondages présidentielle 2027 depuis Wikipédia (gratuit)")
+    sub.add_parser("visuels", help="graphiques PNG dans docs/visuels (gratuit)")
+    po = sub.add_parser("polls", help="relever les sondages présidentielle 2027 sur Wikipédia (gratuit)")
+    po.add_argument("--export", action="store_true", help="envoyer l'historique dans Supabase")
     hi = sub.add_parser("polls-history", help="vidéos par jour citant une personnalité (Oriane, 10 crédits par jour)")
     hi.add_argument("nom")
     hi.add_argument("termes", nargs="+")
@@ -121,12 +123,17 @@ def main() -> None:
     elif args.cmd == "polls":
         from . import polls
         show(polls.collect())
+        if args.export:
+            show(polls.export())
     elif args.cmd == "polls-history":
         from datetime import date as _date
         from . import analyze as _an, polls
         end = _date.fromisoformat(args.fin) if args.fin else (_an._last_complete_day() or datetime.now()).date()
         h = polls.oriane_history(args.nom, args.termes, _date.fromisoformat(args.debut), end)
         show({"jours": len(h), "vidéos": sum(x["videos"] for x in h)})
+    elif args.cmd == "visuels":
+        from . import visuels
+        show(visuels.run())
     elif args.cmd == "cost":
         show({"total ($)": round(store.spent(), 4), "détail": store.cost_report()})
 

@@ -166,13 +166,48 @@ def collect() -> dict:
     names = surname_map()
     for p in polls:
         p["nom"] = names.get(_norm(p["candidat"]))
-    store.cache_set("polls:rows", polls)
-    (config.OUT_DIR / "polls.json").write_text(json.dumps(polls, ensure_ascii=False, indent=1))
+    # On fusionne avec les relevés précédents : un sondage retiré de Wikipédia reste dans notre historique.
+    previous = {(p["institut"], p["date"], p["candidat"]): p for p in store.cache_get("polls:rows") or []}
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    for p in polls:
+        p["premier_releve"] = previous.get((p["institut"], p["date"], p["candidat"]), {}).get("premier_releve", now)
+        previous[(p["institut"], p["date"], p["candidat"])] = p
+    merged = sorted(previous.values(), key=lambda p: (p["date"], p["institut"], p["candidat"]))
+    store.cache_set("polls:rows", merged)
+    (config.OUT_DIR / "polls.json").write_text(json.dumps(merged, ensure_ascii=False, indent=1))
+    snap = config.DATA_DIR / "polls"
+    snap.mkdir(parents=True, exist_ok=True)
+    (snap / f"releve-{now[:16].replace(':', 'h')}.json").write_text(json.dumps(polls, ensure_ascii=False))
+    new_polls = {(p["institut"], p["date"]) for p in polls if p["premier_releve"] == now}
     known = sorted({p["nom"] for p in polls if p["nom"]})
-    return {"sondages": len({(p["institut"], p["date"]) for p in polls}), "scores": len(polls),
+    return {"relevé": now, "nouveaux sondages depuis le dernier relevé": len(new_polls),
+            "sondages": len({(p["institut"], p["date"]) for p in polls}), "scores": len(polls),
             "période": f"{min(p['date'] for p in polls)} → {max(p['date'] for p in polls)}" if polls else None,
             "candidats reconnus": known,
             "non reconnus": sorted({p["candidat"] for p in polls if not p["nom"]})[:15]}
+
+
+def export() -> dict:
+    """Envoie l'historique des sondages et le relevé dans Supabase (upsert : rien n'est effacé)."""
+    from . import export as ex
+    rows = store.cache_get("polls:rows") or []
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    payload = [{k: p.get(k) for k in ("institut", "date", "candidat", "nom", "score", "premier_releve")}
+               | {"hypothese_principale": bool(p.get("hypothese_principale")), "autres": bool(p.get("autres")),
+                  "dernier_releve": now} for p in rows]
+    with ex._client() as http:
+        for i in range(0, len(payload), 500):
+            r = http.post("/sondages", params={"on_conflict": "institut,date,candidat"},
+                          headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+                          content=json.dumps(payload[i:i + 500], ensure_ascii=False))
+            if r.status_code >= 400:
+                raise RuntimeError(f"Supabase {r.status_code} sur sondages : {r.text[:300]}")
+        r = http.post("/sondages_releves", content=json.dumps([{
+            "releve_le": now, "sondages": len({(p["institut"], p["date"]) for p in rows}),
+            "dernier_sondage": max((p["date"] for p in rows), default=None), "source": SOURCE_URL}]))
+        if r.status_code >= 400:
+            raise RuntimeError(f"Supabase {r.status_code} sur sondages_releves : {r.text[:300]}")
+    return {"scores envoyés": len(payload)}
 
 
 def latest(polls: list[dict], ref: date, window_days: int = 21) -> dict[str, dict]:
@@ -232,6 +267,19 @@ def overexposure(persons: list[dict], ref: date) -> list[dict]:
         else:
             p["surexposition_videos"] = p["surexposition_presse"] = None
         p["sondages_serie"] = series(polls, p["nom"])
+        own = [x for x in polls if x["nom"] == p["nom"]]
+        # Entrée dans les sondages : premier test, et premier test avec une colonne à son nom (hors « Autres »).
+        p["teste_depuis"] = min((x["date"] for x in own), default=None)
+        p["colonne_propre_depuis"] = min((x["date"] for x in own if not x.get("autres")), default=None)
+    # Personnalités absentes des sondages récents : on dit seulement à qui elles ressemblent en visibilité
+    # (jamais un « score estimé »). Ex. : « aussi visible que Lisnard, sondé à 6,2 % ».
+    polled = [p for p in persons if p.get("sondage") and p.get("vues")]
+    for p in persons:
+        if p.get("sondage") is None and p.get("camp") not in (None, "international") and p.get("vues") and polled:
+            near = min(polled, key=lambda q: abs(q["vues"] - p["vues"]))
+            p["visibilite_comparable"] = f"aussi visible dans les vidéos que {near['nom']} (sondé à {near['sondage']} %)"
+        else:
+            p["visibilite_comparable"] = None
     return persons
 
 
