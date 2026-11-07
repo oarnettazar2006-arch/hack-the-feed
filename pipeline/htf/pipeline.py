@@ -81,6 +81,12 @@ def run(run_id: str, days: int, per_day: int, top: int, collect: bool, ask) -> d
         step("collecte Oriane (comptes médias)", oriane.collect_media)
         step("collecte Oriane (filet décollage)", lambda: oriane.collect_breakout(days))
 
+        def do_local():
+            from . import local
+            return local.collect("Sud-Ouest", days)
+
+        step("collecte Oriane (veille locale Sud-Ouest)", do_local)
+
         def do_volumes():
             from . import analyze as _an, politics
             end = (_an._last_complete_day() or datetime.now()).date()
@@ -123,6 +129,14 @@ def run(run_id: str, days: int, per_day: int, top: int, collect: bool, ask) -> d
         return {"fiches": min(top, len(cards)), "brief": [b["titre"] for b in brief]}
 
     step("fiches Opus et brief", do_showcase)
+    def do_scouts():
+        from . import local
+        topics = json.loads((config.OUT_DIR / "topics.json").read_text())
+        found = local.scouts(topics)
+        (config.OUT_DIR / "scouts.json").write_text(json.dumps(found, ensure_ascii=False, indent=2))
+        return {"comptes éclaireurs": len(found), "dont Sud-Ouest": sum(1 for a in found if a["region"] == "Sud-Ouest")}
+
+    step("comptes éclaireurs", do_scouts)
     step("export Supabase", export.run)
 
     def do_visuals():

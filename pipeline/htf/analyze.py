@@ -306,6 +306,8 @@ def run(now: datetime | None = None) -> list[dict]:
         themes = Counter(t for n in member_notes for t in n["themes"])
         tones = Counter(n["ton"] for n in member_notes)
         launcher, launch_effect = pivot(members, rates)
+        from . import local
+        geo = local.topic_geography(members)
         from . import politics
         cited = Counter(n for note in member_notes for n in set(annotate.names(note)))
         figures = [n for n, _ in cited.most_common() if politics.is_campaign_figure(n)]
@@ -353,6 +355,8 @@ def run(now: datetime | None = None) -> list[dict]:
             "etat": ("déjà repéré" if covered else "signal faible") if weak
                     else _state(accel, len(recent), len(members), covered, coverage_complete),
             "signal_faible": weak,
+            # Veille locale : régions des vidéos, région où le sujet est né, et schéma « local → national ».
+            "regions": geo["regions"], "foyer": geo["foyer"], "local_vers_national": geo["local_vers_national"],
             "vu_jusqu_au": (fresh_end if weak else now).date().isoformat(),
             "serie": series,
             "video_declencheur": launcher["id"],

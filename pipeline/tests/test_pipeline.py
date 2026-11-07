@@ -112,6 +112,7 @@ def test_brief_perime_jamais_exporte(monkeypatch):
         def __exit__(self, *a): pass
         def delete(self, *a, **k): return httpx.Response(204, request=httpx.Request("DELETE", "http://x"))
         def post(self, path, content): sent[path] += json.loads(content); return httpx.Response(201)
+        def get(self, *a, **k): return httpx.Response(200, json=[])
 
     monkeypatch.setattr(export, "_client", lambda: FakeHttp())
     export.run()

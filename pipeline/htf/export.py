@@ -67,6 +67,8 @@ def run() -> dict:
             "camps": t.get("camps", {}),
             "signal_faible": t.get("signal_faible", False), "vu_jusqu_au": t.get("vu_jusqu_au"),
             "videos_decollage": t.get("videos_decollage", 0),
+            "regions": t.get("regions") or {}, "foyer": t.get("foyer"),
+            "local_vers_national": bool(t.get("local_vers_national")),
         })
         position_of = {}
         for n, p in enumerate(t.get("positions", [])):
@@ -89,6 +91,15 @@ def run() -> dict:
             })
 
     with _client() as http:
+        # Vérification AVANT d'effacer quoi que ce soit (7/11 : un export avait vidé les sujets puis échoué
+        # sur une colonne manquante). Chaque table doit accepter toutes les colonnes qu'on va envoyer.
+        checks = {"topics": topic_rows[:1], "videos": videos[:1], "personnalites": [], "comptes_eclaireurs": []}
+        for table, sample in checks.items():
+            cols = ",".join(sample[0].keys()) if sample else "*"
+            r = http.get(f"/{table}", params={"select": cols, "limit": 0})
+            if r.status_code >= 400:
+                raise RuntimeError(f"Supabase : {table} n'a pas toutes les colonnes ({r.text[:200]}). "
+                                   "Exécuter la dernière migration supabase/migration_*.sql. Rien n'a été effacé.")
         # Instantané : on vide puis on remplit. Les tables filles partent en cascade.
         http.delete("/brief", params={"id": "not.is.null"}).raise_for_status()
         http.delete("/topics", params={"id": "not.is.null"}).raise_for_status()
@@ -110,6 +121,11 @@ def run() -> dict:
             "sondages_serie", "historique_videos", "teste_depuis", "colonne_propre_depuis",
             "visibilite_comparable", "volume_reel", "acceleration_reelle", "surexposition_source")}}
             for n, p in enumerate(persons)])
-    return {"sujets": len(topic_rows), "positions": len(positions), "couverture": len(coverage),
+    scouts_path = config.OUT_DIR / "scouts.json"
+    scouts = json.loads(scouts_path.read_text()) if scouts_path.exists() else []
+    with _client() as http:
+        http.delete("/comptes_eclaireurs", params={"id": "not.is.null"}).raise_for_status()
+        _insert(http, "comptes_eclaireurs", [{"rang": n + 1, **a} for n, a in enumerate(scouts[:300])])
+    return {"comptes éclaireurs": min(len(scouts), 300), "sujets": len(topic_rows), "positions": len(positions), "couverture": len(coverage),
             "vidéos": len(videos), "brief": len(brief) or "aucun (lancer showcase après analyze)",
             "fiches Opus": sum(1 for t in topics if t.get("titre")), "personnalités": len(persons)}

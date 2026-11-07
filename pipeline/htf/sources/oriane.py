@@ -296,6 +296,9 @@ def to_item(r: dict, theme: str | None, weight: float, kind: str = "social", gro
             "theme_query": theme, "weight": weight, "thumbnail": r.get("thumbnailMediaUrl"),
             "comments_text": comments, "hashtags": r.get("hashtags") or [],
             "chunks": chunks, "frames": frames, "platform_id": r.get("platformId"),
+            # Géographie (veille locale) : lieu tagué, lieu du profil, bio du créateur.
+            "location": r.get("locationCompleteAddress"), "profile_location": r.get("profileLocationCompleteAddress"),
+            "bio": (r.get("profileBio") or "")[:300],
             "lien_compte": platform == "instagram",
         },
     }

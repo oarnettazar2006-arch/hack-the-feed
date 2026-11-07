@@ -52,6 +52,9 @@ def main() -> None:
     bt.add_argument("press_day", help="date du premier article, AAAA-MM-JJ")
     sub.add_parser("purge-fake", help="supprimer les fausses vidéos de test")
     sub.add_parser("cost", help="dépenses enregistrées")
+    lc = sub.add_parser("local-collect", help="veille locale : vidéos d'une région (Oriane, 2 appels par jour)")
+    lc.add_argument("--region", default="Sud-Ouest")
+    lc.add_argument("--days", type=int, default=17)
     dc = sub.add_parser("oriane-decollage", help="filet décollage : vidéos FR à ≥3× l'audience du créateur (crédits)")
     dc.add_argument("--days", type=int, default=17)
     sub.add_parser("oriane-volumes", help="volumes réels par personnalité, agrégations Oriane (crédits)")
@@ -152,6 +155,9 @@ def main() -> None:
         from . import analyze as _an, politics
         end = (_an._last_complete_day() or datetime.now()).date()
         show(oriane.people_volumes(list(politics.AFFILIATIONS), end, config.WINDOW_RECENT, config.WINDOW_BASELINE))
+    elif args.cmd == "local-collect":
+        from . import local
+        show(local.collect(args.region, args.days))
     elif args.cmd == "cost":
         show({"total ($)": round(store.spent(), 4), "détail": store.cost_report()})
 
