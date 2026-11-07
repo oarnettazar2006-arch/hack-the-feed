@@ -8,6 +8,7 @@ Les appels consomment des crédits Oriane : `plan()` affiche le nombre d'appels 
 """
 import csv
 import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
@@ -133,9 +134,17 @@ class OrianeCreditsExhausted(RuntimeError):
 
 class Oriane:
     def __init__(self, api_key: str | None = None):
-        self.key = api_key or os.environ.get("ORIANE_API_KEY")
-        if not self.key:
-            raise RuntimeError("ORIANE_API_KEY doit être rempli dans .env")
+        # Plusieurs comptes possibles (crédits hackathon par personne) : ORIANE_API_KEYS=clé1,clé2,clé3.
+        # Quand une clé n'a plus de crédits (402), on passe à la suivante.
+        keys = [api_key] if api_key else [k.strip() for k in os.environ.get("ORIANE_API_KEYS", "").split(",") if k.strip()]
+        if not keys and os.environ.get("ORIANE_API_KEY"):
+            keys = [os.environ["ORIANE_API_KEY"]]
+        if not keys:
+            raise RuntimeError("ORIANE_API_KEY (ou ORIANE_API_KEYS) doit être rempli dans .env")
+        self.keys = keys
+        self.key_index = 0
+        self.key = keys[0]
+        self.lock = threading.Lock()
         self.http = httpx.Client(base_url=BASE_URL, timeout=60)
         self.auth = None
         self.calls = 0
@@ -146,7 +155,8 @@ class Oriane:
         for style in styles:
             for attempt in range(4):
                 self.calls += 1
-                r = self.http.post(path, json=body, params=params, headers=style(self.key))
+                key = self.key
+                r = self.http.post(path, json=body, params=params, headers=style(key))
                 if r.status_code in (429, 500, 502, 503, 504):
                     time.sleep(2 ** attempt)
                     continue
@@ -155,7 +165,15 @@ class Oriane:
                 last = r
                 continue
             if r.status_code == 402:
-                raise OrianeCreditsExhausted(f"Crédits Oriane épuisés ({self.calls} appels faits) : {r.text[:200]}")
+                with self.lock:
+                    if key == self.key and self.key_index + 1 < len(self.keys):
+                        self.key_index += 1
+                        self.key = self.keys[self.key_index]
+                        print(f"Oriane : clé {self.key_index} épuisée, passage à la clé {self.key_index + 1}/{len(self.keys)}")
+                    elif key == self.key:
+                        raise OrianeCreditsExhausted(f"Crédits Oriane épuisés sur les {len(self.keys)} clés "
+                                                     f"({self.calls} appels faits) : {r.text[:200]}")
+                return self._post(body, params, path)
             if r.status_code == 416:  # offset au-delà du dernier résultat
                 return {"data": {"results": []}, "metadata": {"pagination": {"totalCount": 0}}}
             if r.status_code >= 400:
